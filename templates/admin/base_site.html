@@ -1,0 +1,235 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ title }} | DocConnect Admin{% endblock %}
+
+{% block branding %}
+<div id="site-name">
+  <a href="{% url 'admin:index' %}" style="display:flex;align-items:center;gap:10px;text-decoration:none">
+    <div style="width:34px;height:34px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:17px;color:#0a66c2;flex-shrink:0">D</div>
+    <div>
+      <div style="color:#fff;font-weight:800;font-size:17px;line-height:1.1;letter-spacing:-0.3px">DocConnect</div>
+      <div style="color:rgba(255,255,255,0.55);font-size:10px;font-weight:500;letter-spacing:1px;text-transform:uppercase">Admin Panel</div>
+    </div>
+  </a>
+</div>
+{% endblock %}
+
+{% block usertools %}
+<div id="user-tools" style="display:flex;align-items:center;gap:10px">
+  <a href="/" style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,0.85);text-decoration:none;font-size:13px;padding:6px 12px;border-radius:5px;border:1px solid rgba(255,255,255,0.3);transition:all 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='transparent'">&#127968; View Site</a>
+  <div style="position:relative" id="admin-user-menu">
+    <button onclick="toggleUserMenu()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:5px 10px;border-radius:6px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);transition:all 0.15s" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.12)'">
+      <div style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;border:2px solid rgba(255,255,255,0.5);flex-shrink:0">
+        {% if user.user_type == 'DOCTOR' %}{% with dp=user.doctor_profile %}{{ dp.first_name|first|upper }}{{ dp.last_name|first|upper }}{% endwith %}{% else %}{{ user.get_user_type_display|slice:":2"|upper }}{% endif %}
+      </div>
+      <div style="text-align:left;line-height:1.2">
+        <div style="color:#fff;font-size:13px;font-weight:600">{% if user.user_type == 'DOCTOR' %}{% with dp=user.doctor_profile %}Dr. {{ dp.first_name }}{% endwith %}{% else %}{{ user.get_user_type_display }}{% endif %}</div>
+        <div style="color:rgba(255,255,255,0.6);font-size:11px">{{ user.phone }}</div>
+      </div>
+      <svg width="10" height="6" viewBox="0 0 10 6" fill="rgba(255,255,255,0.7)"><path d="M0 0l5 6 5-6z"/></svg>
+    </button>
+    <div id="user-dropdown" style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:#fff;border:1px solid #e0e0e0;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.18);min-width:220px;z-index:9999;overflow:hidden">
+      <!-- Header -->
+      <div style="padding:16px;background:linear-gradient(135deg,#0a66c2,#004182);display:flex;align-items:center;gap:12px">
+        <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#fff;border:2px solid rgba(255,255,255,0.5);flex-shrink:0">
+          {% if user.user_type == 'DOCTOR' %}{% with dp=user.doctor_profile %}{{ dp.first_name|first|upper }}{{ dp.last_name|first|upper }}{% endwith %}{% else %}{{ user.get_user_type_display|slice:":2"|upper }}{% endif %}
+        </div>
+        <div>
+          <div style="color:#fff;font-weight:700;font-size:14px">{% if user.user_type == 'DOCTOR' %}{% with dp=user.doctor_profile %}Dr. {{ dp.first_name }} {{ dp.last_name }}{% endwith %}{% else %}{{ user.get_user_type_display }}{% endif %}</div>
+          <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-top:2px">{{ user.phone }}</div>
+        </div>
+      </div>
+      <!-- Menu items -->
+      <div style="padding:6px 0">
+        <a href="/" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;color:#333;text-decoration:none" onmouseover="this.style.background='#f3f2ef'" onmouseout="this.style.background='transparent'"><span style="font-size:15px">&#127968;</span> View Site</a>
+        <a href="{% url 'admin:accounts_user_changelist' %}" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;color:#333;text-decoration:none" onmouseover="this.style.background='#f3f2ef'" onmouseout="this.style.background='transparent'"><span style="font-size:15px">&#128100;</span> Manage Users</a>
+        <a href="/admin/change-password/" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;color:#333;text-decoration:none" onmouseover="this.style.background='#f3f2ef'" onmouseout="this.style.background='transparent'"><span style="font-size:15px">&#128274;</span> Change Password</a>
+        <div style="border-top:1px solid #f0f0f0;margin:4px 0"></div>
+        <form method="post" action="{% url 'admin:logout' %}" style="margin:0">{% csrf_token %}<button type="submit" style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 16px;font-size:13px;color:#cc1016;background:transparent;border:none;cursor:pointer;text-align:left" onmouseover="this.style.background='#fce8e6'" onmouseout="this.style.background='transparent'"><span style="font-size:15px">&#128682;</span> Sign Out</button></form>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function toggleUserMenu(){
+  var d=document.getElementById('user-dropdown');
+  d.style.display=d.style.display==='none'?'block':'none';
+}
+document.addEventListener('click',function(e){
+  var m=document.getElementById('admin-user-menu');
+  if(m&&!m.contains(e.target))document.getElementById('user-dropdown').style.display='none';
+});
+</script>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+html { height: auto !important; overflow-y: auto !important; }
+body { height: auto !important; overflow-y: auto !important; }
+#container { height: auto !important; min-height: 100vh !important; overflow: visible !important; }
+#container > .main { overflow: visible !important; }
+.main > .content { overflow: visible !important; }
+.sticky { overflow-y: auto !important; padding-bottom: 80px !important; box-sizing: border-box !important; }
+</style>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  :root {
+    --blue: #0a66c2; --blue-dark: #004182; --green: #057642;
+    --red: #cc1016; --orange: #e16b00;
+    --bg: #f3f2ef; --white: #fff;
+    --border: #e0e0e0; --text: #1a1a1a; --muted: #666;
+  }
+
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important; background: var(--bg) !important; color: var(--text) !important; }
+  /* Allow detail pages to scroll */
+  #content-main { overflow-x: auto !important; }
+  #content { overflow-x: auto !important; }
+  /* Fix sidebar clipping — handled in extrahead block above */
+  #main { align-items: flex-start !important; }
+
+  /* ── Header ── */
+  #header { background: linear-gradient(135deg, #0a66c2 0%, #004182 100%) !important; padding: 0 20px !important; height: 58px !important; display: flex !important; align-items: center !important; box-shadow: 0 2px 12px rgba(0,0,0,0.2) !important; position: relative !important; z-index: 100 !important; flex-shrink: 0 !important; }
+  #header #site-name { flex: 1; }
+  #user-tools { display: flex !important; align-items: center !important; gap: 10px !important; }
+
+  /* ── Breadcrumbs ── */
+  div.breadcrumbs { background: var(--white) !important; padding: 10px 24px !important; border-bottom: 1px solid var(--border) !important; font-size: 13px !important; color: var(--muted) !important; }
+  div.breadcrumbs a { color: var(--blue) !important; }
+
+  /* ── Content ── */
+  #content { padding: 24px !important; background: var(--bg) !important; }
+  #content h1 { font-size: 22px !important; font-weight: 700 !important; color: var(--text) !important; margin-bottom: 20px !important; }
+
+  /* ── LEFT NAV SIDEBAR — minimal overrides only ── */
+  #toggle-nav-sidebar { border-right: 1px solid var(--border) !important; }
+  #nav-filter:focus { border-color: var(--blue) !important; outline: none !important; }
+
+  /* ── Module / App cards ── */
+  .app-accounts, .app-doctors, .app-hospitals, .app-jobs,
+  .app-availability, .app-shifts, .app-messaging, .app-notifications, .app-core {
+    background: var(--white) !important; border: 1px solid var(--border) !important;
+    border-radius: 8px !important; margin-bottom: 16px !important;
+    overflow: hidden !important; box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important;
+  }
+  .app-accounts caption, .app-doctors caption, .app-hospitals caption,
+  .app-jobs caption, .app-availability caption, .app-shifts caption,
+  .app-messaging caption, .app-notifications caption, .app-core caption {
+    background: var(--white) !important; padding: 14px 20px !important;
+    font-size: 15px !important; font-weight: 700 !important; color: var(--text) !important;
+    border-bottom: 1px solid var(--border) !important; text-align: left !important;
+  }
+  .app-accounts caption a, .app-doctors caption a, .app-hospitals caption a,
+  .app-jobs caption a, .app-availability caption a, .app-shifts caption a,
+  .app-messaging caption a, .app-notifications caption a, .app-core caption a {
+    color: var(--text) !important; font-weight: 700 !important;
+  }
+  table.model-user td, table.model-doctorprofile td, table.model-hospital td,
+  table.model-jobpost td, table.model-jobapplication td, table.model-notification td,
+  table.model-shiftrequirement td, table.model-doctoravailability td,
+  table.model-otpchallenge td, table.model-refreshsession td,
+  table.model-specialization td, table.model-qualification td, table.model-council td,
+  table.model-hospitaluser td, table.model-hospitalbranch td, table.model-hospitaldepartment td,
+  table.model-doctorregistration td, table.model-doctorqualification td, table.model-doctorexperience td,
+  table.model-shiftrequest td, table.model-availabilityslot td, table.model-applicationhistory td {
+    padding: 10px 20px !important; font-size: 13px !important; color: var(--text) !important;
+    border-bottom: 1px solid #f5f5f5 !important;
+  }
+  table.model-user td a, table.model-doctorprofile td a, table.model-hospital td a,
+  table.model-jobpost td a { color: var(--blue) !important; font-weight: 600 !important; }
+
+  /* ── Change list table ── */
+  #changelist { background: var(--white) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important; }
+  #changelist table { border: none !important; box-shadow: none !important; }
+  #changelist table thead th { background: #f8f9fa !important; color: var(--muted) !important; font-size: 11px !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.6px !important; padding: 10px 16px !important; border-bottom: 2px solid var(--border) !important; }
+  #changelist table thead th a { color: var(--muted) !important; }
+  #changelist table tbody tr:hover { background: #f8f9fa !important; }
+  #changelist table tbody td { padding: 12px 16px !important; font-size: 13px !important; color: var(--text) !important; border-bottom: 1px solid #f0f0f0 !important; }
+  #changelist table tbody td a { color: var(--blue) !important; font-weight: 600 !important; }
+  #changelist-filter { background: var(--white) !important; border-left: 1px solid var(--border) !important; padding: 16px !important; }
+  #changelist-filter h2 { font-size: 11px !important; font-weight: 700 !important; text-transform: uppercase !important; color: var(--muted) !important; letter-spacing: 0.6px !important; margin-bottom: 12px !important; }
+  #changelist-filter h3 { font-size: 13px !important; font-weight: 700 !important; color: var(--text) !important; margin: 16px 0 8px !important; }
+  #changelist-filter li { font-size: 13px !important; padding: 3px 0 !important; color: var(--text) !important; }
+  #changelist-filter li a { color: var(--blue) !important; }
+  #changelist-filter li.selected a { color: var(--text) !important; font-weight: 700 !important; }
+
+  /* ── Toolbar / Search ── */
+  #toolbar { background: var(--white) !important; padding: 12px 16px !important; border-bottom: 1px solid var(--border) !important; }
+  #searchbar { border: 1px solid var(--border) !important; border-radius: 4px !important; padding: 7px 12px !important; font-size: 14px !important; width: 280px !important; outline: none !important; color: var(--text) !important; }
+  #searchbar:focus { border-color: var(--blue) !important; box-shadow: 0 0 0 2px rgba(10,102,194,0.15) !important; }
+  input[type=submit].default { background: var(--blue) !important; border: none !important; border-radius: 4px !important; padding: 7px 16px !important; font-size: 13px !important; font-weight: 600 !important; cursor: pointer !important; color: #fff !important; }
+  input[type=submit].default:hover { background: var(--blue-dark) !important; }
+
+  /* ── Actions ── */
+  .actions { background: #f8f9fa !important; padding: 10px 16px !important; border-bottom: 1px solid var(--border) !important; font-size: 13px !important; color: var(--text) !important; }
+  .actions label { color: var(--text) !important; }
+  .actions select { border: 1px solid var(--border) !important; border-radius: 4px !important; padding: 5px 8px !important; font-size: 13px !important; color: var(--text) !important; }
+  .actions button { background: var(--blue) !important; color: #fff !important; border: none !important; border-radius: 4px !important; padding: 6px 14px !important; font-size: 13px !important; font-weight: 600 !important; cursor: pointer !important; margin-left: 8px !important; }
+
+  /* ── Pagination ── */
+  .paginator { font-size: 13px !important; color: var(--muted) !important; padding: 12px 16px !important; }
+  .paginator a { color: var(--blue) !important; padding: 4px 8px !important; border-radius: 4px !important; }
+  .paginator a:hover { background: #eef3f8 !important; }
+  .paginator .this-page { background: var(--blue) !important; color: #fff !important; padding: 4px 8px !important; border-radius: 4px !important; }
+
+  /* ── Forms ── */
+  .form-row { padding: 12px 0 !important; border-bottom: 1px solid #f5f5f5 !important; }
+  .form-row label { font-size: 13px !important; font-weight: 600 !important; color: var(--text) !important; }
+  .aligned label { padding: 4px 10px 0 10px !important; }
+  .form-row input[type=text], .form-row input[type=email], .form-row input[type=password],
+  .form-row input[type=number], .form-row select, .form-row textarea {
+    border: 1px solid var(--border) !important; border-radius: 4px !important;
+    font-size: 14px !important; outline: none !important; color: var(--text) !important;
+  }
+  .form-row input:focus, .form-row select:focus, .form-row textarea:focus {
+    border-color: var(--blue) !important; box-shadow: 0 0 0 2px rgba(10,102,194,0.15) !important;
+  }
+  .submit-row { background: var(--white) !important; border-top: 1px solid var(--border) !important; padding: 14px 20px !important; }
+  .submit-row input { border-radius: 4px !important; padding: 8px 20px !important; font-size: 14px !important; font-weight: 600 !important; }
+  .submit-row a.deletelink { height: auto !important; }
+  input[name="_save"] { background: var(--blue) !important; border-color: var(--blue) !important; color: #fff !important; }
+  input[name="_save"]:hover { background: var(--blue-dark) !important; }
+
+  /* ── Fieldsets ── */
+  fieldset { border: 1px solid var(--border) !important; border-radius: 8px !important; margin-bottom: 16px !important; background: var(--white) !important; }
+  fieldset h2 { background: #f8f9fa !important; padding: 10px 16px !important; font-size: 11px !important; font-weight: 700 !important; color: var(--muted) !important; text-transform: uppercase !important; letter-spacing: 0.6px !important; border-bottom: 1px solid var(--border) !important; border-radius: 8px 8px 0 0 !important; }
+
+  /* ── Messages ── */
+  .messagelist { padding: 0 !important; margin: 0 0 16px !important; list-style: none !important; }
+  .messagelist li { padding: 12px 20px !important; font-size: 13px !important; border-radius: 6px !important; margin-bottom: 8px !important; }
+  .messagelist .success { background: #e6f4ea !important; color: var(--green) !important; border-left: 4px solid var(--green) !important; }
+  .messagelist .error { background: #fce8e6 !important; color: var(--red) !important; border-left: 4px solid var(--red) !important; }
+  .messagelist .warning { background: #fff3e0 !important; color: var(--orange) !important; border-left: 4px solid var(--orange) !important; }
+
+  /* ── Object tools ── */
+  .object-tools { margin: 0 0 16px !important; }
+  .object-tools a { background: var(--blue) !important; border-radius: 4px !important; padding: 7px 16px !important; font-size: 13px !important; font-weight: 600 !important; color: #fff !important; text-decoration: none !important; }
+  .object-tools a:hover { background: var(--blue-dark) !important; }
+  .object-tools a.addlink { background: var(--green) !important; }
+  .object-tools a.addlink:hover { background: #045d32 !important; }
+
+  /* ── Dashboard ── */
+  #content-related { display: none !important; }
+  .dashboard #content { max-width: 100% !important; }
+
+  /* ── Inline ── */
+  .inline-group { border: 1px solid var(--border) !important; border-radius: 8px !important; overflow: hidden !important; margin-bottom: 16px !important; }
+  .inline-group h2 { background: #f8f9fa !important; padding: 10px 16px !important; font-size: 11px !important; font-weight: 700 !important; color: var(--muted) !important; text-transform: uppercase !important; border-bottom: 1px solid var(--border) !important; }
+
+  /* ── Help text ── */
+  .help { color: var(--muted) !important; font-size: 12px !important; }
+  p.help { color: var(--muted) !important; }
+
+  /* ── Select2 / related ── */
+  .related-widget-wrapper { color: var(--text) !important; }
+
+  @media (max-width: 767px) {
+    #header { padding: 0 16px !important; }
+    #content { padding: 16px !important; }
+  }
+</style>
+{% endblock %}

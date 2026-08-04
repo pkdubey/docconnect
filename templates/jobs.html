@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Jobs — DocConnect{% endblock %}
+{% block nav_jobs %}active{% endblock %}
+
+{% block content %}
+<div class="layout layout-2col">
+
+  <!-- LEFT SIDEBAR — Filters -->
+  <aside class="sidebar-left">
+    <div class="card">
+      <div class="card-body" style="padding:12px 16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:12px">Filter Jobs</div>
+        <form method="get" action="/jobs/" id="jobFilterForm">
+          {% if search %}<input type="hidden" name="q" value="{{ search }}"/>{% endif %}
+          <div class="form-group">
+            <label class="form-label">Job Type</label>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              {% for val, label in job_types %}
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                <input type="radio" name="type" value="{{ val }}" {% if filter_type == val %}checked{% endif %}/> {{ label }}
+              </label>
+              {% endfor %}
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                <input type="radio" name="type" value="" {% if not filter_type %}checked{% endif %}/> All Types
+              </label>
+            </div>
+          </div>
+          <hr style="border:none;border-top:1px solid var(--border);margin:12px 0"/>
+          <div class="form-group">
+            <label class="form-label">City</label>
+            <input class="form-input" name="city" placeholder="e.g. Delhi" value="{{ filter_city }}"/>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="checkbox" name="urgent" value="1" {% if filter_urgent %}checked{% endif %}/> Urgent only
+            </label>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%">Apply Filters</button>
+          {% if filter_type or filter_city or filter_urgent %}
+          <a href="/jobs/" class="btn btn-outline" style="width:100%;margin-top:6px;text-align:center;display:block">Clear</a>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+    <div class="card" style="margin-bottom:8px">
+      <form method="get" action="/jobs/" style="padding:12px 16px;display:flex;gap:8px">
+        {% if filter_type %}<input type="hidden" name="type" value="{{ filter_type }}"/>{% endif %}
+        {% if filter_city %}<input type="hidden" name="city" value="{{ filter_city }}"/>{% endif %}
+        {% if filter_urgent %}<input type="hidden" name="urgent" value="1"/>{% endif %}
+        <input class="form-input" name="q" placeholder="Search jobs by title, hospital..." value="{{ search }}" style="flex:1"/>
+        <button type="submit" class="btn btn-primary">Search</button>
+        <button type="button" class="btn btn-outline" onclick="openModal('postJobModal')">+ Post Job</button>
+      </form>
+      <div class="tabs">
+        <div class="tab {% if not filter_type %}active{% endif %}" onclick="setType('')">All Jobs</div>
+        <div class="tab {% if filter_type == 'LOCUM' or filter_type == 'VISITING' %}active{% endif %}" onclick="setType('LOCUM')">Locum / Visiting</div>
+        <div class="tab {% if filter_type == 'FULL_TIME' %}active{% endif %}" onclick="setType('FULL_TIME')">Full Time</div>
+        <div class="tab {% if filter_type == 'PART_TIME' %}active{% endif %}" onclick="setType('PART_TIME')">Part Time</div>
+        <div class="tab {% if filter_urgent %}active{% endif %}" onclick="setUrgent()">🔴 Urgent</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-header">
+        <h2>{{ total }} Job{{ total|pluralize }} Found</h2>
+        <select class="form-select" style="width:auto;font-size:13px">
+          <option>Most Recent</option>
+        </select>
+      </div>
+
+      {% for job in jobs %}
+      <div class="job-card">
+        <div class="job-logo">🏥</div>
+        <div class="job-info">
+          <div class="job-title"><a href="#">{{ job.title }}</a></div>
+          <div class="job-hospital">{{ job.hospital.name }}</div>
+          <div class="job-meta">
+            📍 {{ job.location.city|default:"" }}{% if job.location.state %}, {{ job.location.state }}{% endif %}
+            {% if job.salary_min and job.salary_visibility == 'PUBLIC' %}
+              &nbsp;|&nbsp; 💰 ₹{{ job.salary_min }}{% if job.salary_max %}–{{ job.salary_max }}{% endif %}
+            {% elif job.salary_visibility == 'ON_REQUEST' %}
+              &nbsp;|&nbsp; 💰 Salary on request
+            {% endif %}
+            &nbsp;|&nbsp; {{ job.experience_min_years }}+ yrs
+          </div>
+          <div style="margin-top:4px">
+            {% if job.is_urgent %}<span class="job-badge badge-urgent">🔴 Urgent</span>{% endif %}
+            <span class="job-badge badge-{{ job.job_type|lower }}">{{ job.get_job_type_display }}</span>
+            <span class="job-badge" style="background:#f3f2ef;color:#666">{{ job.get_shift_type_display }} shift</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          <button class="btn btn-primary btn-sm" onclick="showToast('Applied successfully! Hospital will contact you.')">Apply</button>
+          <button class="btn btn-outline btn-sm" onclick="showToast('Job saved!')">Save</button>
+          <div style="font-size:11px;color:var(--muted)">{{ job.published_at|timesince|default:"Recently" }} ago</div>
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty-state">
+        <div class="icon">💼</div>
+        <p>No jobs found{% if search %} for "{{ search }}"{% endif %}{% if filter_type %} of type {{ filter_type }}{% endif %}.</p>
+        <a href="/jobs/" class="btn btn-outline" style="margin-top:12px">View All Jobs</a>
+      </div>
+      {% endfor %}
+    </div>
+  </main>
+</div>
+
+<!-- Post Job Modal -->
+<div class="modal-overlay" id="postJobModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3>Post a Job</h3>
+      <button class="modal-close" onclick="closeModal('postJobModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Job Title *</label>
+        <input class="form-input" id="jobTitle" placeholder="e.g. Cardiologist — Locum"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Job Type *</label>
+          <select class="form-select" id="jobType">
+            {% for val, label in job_types %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">City *</label>
+          <input class="form-input" id="jobCity" placeholder="Mumbai"/>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Min Salary (₹)</label>
+          <input class="form-input" type="number" id="jobSalMin" placeholder="50000"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Salary (₹)</label>
+          <input class="form-input" type="number" id="jobSalMax" placeholder="100000"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description *</label>
+        <textarea class="form-textarea" id="jobDesc" placeholder="Job description, responsibilities, requirements..."></textarea>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="jobUrgent"/> Mark as Urgent
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('postJobModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('postJobModal');showToast('Job posted successfully!')">Post Job</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setType(t) {
+  const url = new URL(window.location.href);
+  if (t) url.searchParams.set('type', t); else url.searchParams.delete('type');
+  url.searchParams.delete('urgent');
+  window.location.href = url.toString();
+}
+function setUrgent() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('urgent', '1');
+  url.searchParams.delete('type');
+  window.location.href = url.toString();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Messages — DocConnect{% endblock %}
+{% block nav_msg %}active{% endblock %}
+
+{% block content %}
+<div style="max-width:1128px;margin:0 auto;padding:24px 16px">
+  <div style="display:grid;grid-template-columns:320px 1fr;gap:0;background:var(--white);border:1px solid var(--border);border-radius:8px;height:calc(100vh - 100px);overflow:hidden">
+
+    <!-- Conversation List -->
+    <div style="border-right:1px solid var(--border);display:flex;flex-direction:column">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <h2 style="font-size:18px;font-weight:700">Messaging</h2>
+        <button class="btn btn-outline btn-sm" onclick="openModal('newMsgModal')">✏️ New</button>
+      </div>
+      <div style="padding:8px 12px;border-bottom:1px solid var(--border)">
+        <input class="form-input" placeholder="Search messages..." style="font-size:13px"/>
+      </div>
+      <div style="overflow-y:auto;flex:1">
+        {% for conv in conversations %}
+        <a href="/messaging/?conv={{ conv.id }}" style="text-decoration:none;color:inherit">
+          <div style="padding:12px 16px;display:flex;gap:10px;cursor:pointer;border-bottom:1px solid var(--border);{% if active_conv and active_conv.id == conv.id %}background:#eef3f8;{% endif %}" class="conv-item">
+            <div style="width:48px;height:48px;border-radius:50%;background:{{ conv.color }};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px;flex-shrink:0">{{ conv.initials }}</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between">
+                <span style="font-weight:700;font-size:14px">{{ conv.name }}</span>
+                <span style="font-size:11px;color:var(--muted)">{{ conv.time }}</span>
+              </div>
+              <div style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ conv.last_msg }}</div>
+            </div>
+            {% if conv.unread %}<div style="width:8px;height:8px;background:var(--blue);border-radius:50%;margin-top:6px;flex-shrink:0"></div>{% endif %}
+          </div>
+        </a>
+        {% empty %}
+        <div style="padding:32px 16px;text-align:center;color:var(--muted)">
+          <div style="font-size:32px;margin-bottom:8px">💬</div>
+          <div style="font-size:14px">No conversations yet.</div>
+          <div style="font-size:12px;margin-top:4px">Connect with doctors to start messaging.</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Chat Window -->
+    <div style="display:flex;flex-direction:column" id="chatWindow">
+      {% if active_conv %}
+      <!-- Chat Header -->
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+        <div style="width:40px;height:40px;border-radius:50%;background:{{ active_conv.color }};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">{{ active_conv.initials }}</div>
+        <div>
+          <div style="font-weight:700;font-size:14px">{{ active_conv.name }}</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm">📞 Call</button>
+          <button class="btn btn-outline btn-sm">👤 Profile</button>
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px" id="msgList">
+        <div style="text-align:center;font-size:12px;color:var(--muted)">Conversation</div>
+        {% for msg in active_messages %}
+        {% if msg.sender == request.user %}
+        <div style="display:flex;gap:8px;max-width:70%;align-self:flex-end;flex-direction:row-reverse">
+          <div style="width:32px;height:32px;border-radius:50%;background:#057642;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">Me</div>
+          <div>
+            <div style="background:#0a66c2;color:#fff;padding:10px 14px;border-radius:12px 0 12px 12px;font-size:14px">{{ msg.content }}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px;text-align:right">{{ msg.created_at|time:"g:i A" }} ✓✓</div>
+          </div>
+        </div>
+        {% else %}
+        <div style="display:flex;gap:8px;max-width:70%">
+          <div style="width:32px;height:32px;border-radius:50%;background:#0a66c2;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">
+            {{ active_conv.initials|slice:":2" }}
+          </div>
+          <div>
+            <div style="background:#f3f2ef;padding:10px 14px;border-radius:0 12px 12px 12px;font-size:14px">{{ msg.content }}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">{{ msg.created_at|time:"g:i A" }}</div>
+          </div>
+        </div>
+        {% endif %}
+        {% empty %}
+        <div style="text-align:center;color:var(--muted);font-size:13px;margin-top:32px">No messages yet. Say hello! 👋</div>
+        {% endfor %}
+      </div>
+
+      <!-- Message Input -->
+      <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">
+        <button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">📎</button>
+        <input class="form-input" id="msgInput" placeholder="Write a message..." style="flex:1;border-radius:24px"
+               onkeydown="if(event.key==='Enter')sendMsg()"/>
+        <button class="btn btn-primary" onclick="sendMsg()">Send</button>
+      </div>
+
+      {% else %}
+      <!-- No conversation selected -->
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--muted)">
+        <div style="font-size:48px;margin-bottom:16px">💬</div>
+        <div style="font-size:16px;font-weight:600">Select a conversation</div>
+        <div style="font-size:13px;margin-top:4px">or start a new one</div>
+        <button class="btn btn-primary" style="margin-top:16px" onclick="openModal('newMsgModal')">✏️ New Message</button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- New Message Modal -->
+<div class="modal-overlay" id="newMsgModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>New Message</h3>
+      <button class="modal-close" onclick="closeModal('newMsgModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Search Doctor</label>
+        <input class="form-input" placeholder="Search by name or phone..."/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('newMsgModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('newMsgModal');showToast('Feature coming soon!')">Start Chat</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CONV_ID = "{{ active_conv.id|default:'' }}";
+const CSRF = "{{ csrf_token }}";
+
+function sendMsg() {
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim();
+  if (!text || !CONV_ID) return;
+
+  // Optimistic UI
+  const list = document.getElementById('msgList');
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;gap:8px;max-width:70%;align-self:flex-end;flex-direction:row-reverse';
+  div.innerHTML = `
+    <div style="width:32px;height:32px;border-radius:50%;background:#057642;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">Me</div>
+    <div>
+      <div style="background:#0a66c2;color:#fff;padding:10px 14px;border-radius:12px 0 12px 12px;font-size:14px">${text}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;text-align:right">Just now ✓</div>
+    </div>`;
+  list.appendChild(div);
+  list.scrollTop = list.scrollHeight;
+  input.value = '';
+
+  fetch('/messaging/send/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({conversation_id: CONV_ID, content: text})
+  }).catch(() => {});
+}
+
+// Scroll to bottom on load
+window.addEventListener('load', () => {
+  const list = document.getElementById('msgList');
+  if (list) list.scrollTop = list.scrollHeight;
+});
+</script>
+{% endblock %}

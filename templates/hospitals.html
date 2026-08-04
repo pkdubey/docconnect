@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Hospitals — DocConnect{% endblock %}
+
+{% block content %}
+<div class="layout layout-2col">
+  <aside class="sidebar-left">
+    <div class="card">
+      <div class="card-body" style="padding:12px 16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:12px">Filter Hospitals</div>
+        <form method="get" action="/hospitals/" id="hospFilterForm">
+          {% if search %}<input type="hidden" name="q" value="{{ search }}"/>{% endif %}
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select class="form-select" name="type">
+              <option value="">All Types</option>
+              {% for val, label in hospital_types %}
+              <option value="{{ val }}" {% if filter_type == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">City</label>
+            <input class="form-input" name="city" placeholder="e.g. Chennai" value="{{ filter_city }}"/>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="checkbox" name="verified" value="1" {% if verified_only %}checked{% endif %}/> Verified only
+            </label>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%">Filter</button>
+          {% if filter_type or filter_city or verified_only %}
+          <a href="/hospitals/" class="btn btn-outline" style="width:100%;margin-top:6px;text-align:center;display:block">Clear</a>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="card" style="margin-bottom:8px">
+      <form method="get" action="/hospitals/" style="padding:12px 16px;display:flex;gap:8px">
+        {% if filter_type %}<input type="hidden" name="type" value="{{ filter_type }}"/>{% endif %}
+        {% if filter_city %}<input type="hidden" name="city" value="{{ filter_city }}"/>{% endif %}
+        {% if verified_only %}<input type="hidden" name="verified" value="1"/>{% endif %}
+        <input class="form-input" name="q" placeholder="Search hospitals..." value="{{ search }}" style="flex:1"/>
+        <button type="submit" class="btn btn-primary">Search</button>
+        <button type="button" class="btn btn-outline" onclick="openModal('registerHospitalModal')">+ Register Hospital</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="section-header">
+        <h2>Hospitals & Clinics</h2>
+        <span style="font-size:13px;color:var(--muted)">{{ total }} found</span>
+      </div>
+
+      {% for h in hospitals %}
+      <div style="padding:16px;border-bottom:1px solid var(--border);display:flex;gap:12px">
+        <div style="width:56px;height:56px;border-radius:8px;background:#eef3f8;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">🏥</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:15px;color:var(--blue)">{{ h.name }}</div>
+          <div style="font-size:13px;color:var(--muted)">{{ h.get_type_display }} · {{ h.location.city|default:"" }}{% if h.location.state %}, {{ h.location.state }}{% endif %}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">
+            {% if h.bed_count %}🛏 {{ h.bed_count }} beds &nbsp;|&nbsp;{% endif %}
+            {% if h.phone %}📞 {{ h.phone }}{% endif %}
+          </div>
+          <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span class="job-badge badge-{{ h.verification_status|lower }}">
+              {% if h.verification_status == 'VERIFIED' %}✓ Verified
+              {% elif h.verification_status == 'PENDING' %}⏳ Pending
+              {% else %}Unverified{% endif %}
+            </span>
+            {% if h.open_jobs %}<span style="font-size:12px;color:var(--muted)">{{ h.open_jobs }} open job{{ h.open_jobs|pluralize }}</span>{% endif %}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <a href="/jobs/?hospital={{ h.id }}" class="btn btn-outline btn-sm">View Jobs</a>
+          <button class="btn btn-outline btn-sm" onclick="showToast('Following {{ h.name }}!')">Follow</button>
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty-state">
+        <div class="icon">🏥</div>
+        <p>No hospitals found{% if search %} for "{{ search }}"{% endif %}.</p>
+        <a href="/hospitals/" class="btn btn-outline" style="margin-top:12px">View All</a>
+      </div>
+      {% endfor %}
+    </div>
+  </main>
+</div>
+
+<!-- Register Hospital Modal -->
+<div class="modal-overlay" id="registerHospitalModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3>Register Hospital</h3>
+      <button class="modal-close" onclick="closeModal('registerHospitalModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Hospital Name *</label>
+        <input class="form-input" id="hospName" placeholder="e.g. Apollo Hospital"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Type *</label>
+          <select class="form-select" id="hospType">
+            {% for val, label in hospital_types %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bed Count</label>
+          <input class="form-input" type="number" id="hospBeds" placeholder="200"/>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">City *</label>
+          <input class="form-input" id="hospCity" placeholder="Mumbai"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">State *</label>
+          <input class="form-input" id="hospState" placeholder="Maharashtra"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Phone</label>
+        <input class="form-input" id="hospPhone" placeholder="022-XXXXXXXX"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Website</label>
+        <input class="form-input" id="hospWeb" placeholder="https://hospital.com"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('registerHospitalModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('registerHospitalModal');showToast('Hospital registration submitted for verification!')">Submit</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

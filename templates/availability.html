@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+{% block title %}Availability Exchange — DocConnect{% endblock %}
+{% block nav_avail %}active{% endblock %}
+
+{% block content %}
+<div class="layout layout-2col">
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar-left">
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body" style="padding:12px 16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:12px">My Availability</div>
+        <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="openModal('availModal')">+ Post Availability</button>
+        <button class="btn btn-outline" style="width:100%" onclick="openModal('shiftModal')">🏥 Post Shift Requirement</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body" style="padding:12px 16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:12px">Filter</div>
+        <form method="get" action="/availability/">
+          <div class="form-group">
+            <label class="form-label">Availability Type</label>
+            <select class="form-select" name="type">
+              <option value="">All Types</option>
+              {% for val, label in avail_types %}
+              <option value="{{ val }}" {% if filter_type == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Urgency (Shifts)</label>
+            <select class="form-select" name="urgency">
+              <option value="">All</option>
+              {% for val, label in urgencies %}
+              <option value="{{ val }}" {% if filter_urgency == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%">Filter</button>
+          {% if filter_type or filter_urgency %}
+          <a href="/availability/" class="btn btn-outline" style="width:100%;margin-top:6px;text-align:center;display:block">Clear</a>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+    <div class="tabs" style="background:var(--white);border-radius:8px 8px 0 0;border:1px solid var(--border);border-bottom:none">
+      <div class="tab active" onclick="switchTab('doctors')">👨⚕️ Doctor Availability ({{ availabilities|length }})</div>
+      <div class="tab" onclick="switchTab('shifts')">🏥 Shift Requirements ({{ shift_requirements|length }})</div>
+      <div class="tab" onclick="switchTab('mine')">📋 My Posts</div>
+    </div>
+
+    <!-- Doctor Availability Tab -->
+    <div id="tab-doctors" class="card" style="border-radius:0 0 8px 8px">
+      <div class="section-header">
+        <h2>Available Doctors</h2>
+        <span style="font-size:13px;color:var(--muted)">{{ availabilities|length }} available</span>
+      </div>
+
+      {% for a in availabilities %}
+      <div class="avail-card">
+        <div class="avail-header">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="doctor-avatar" style="width:40px;height:40px;font-size:14px;background:{{ a.color }}">{{ a.initials }}</div>
+              <div>
+                <div class="avail-type">Dr. {{ a.doctor_name }}</div>
+                <div class="avail-dates">{{ a.availability_type_display }} · {{ a.available_from }} to {{ a.available_until }}</div>
+              </div>
+            </div>
+            <div style="margin-top:6px;font-size:12px;color:var(--muted)">
+              {% if a.preferred_location.city %}📍 {{ a.preferred_location.city }}{% endif %}
+              {% if a.minimum_compensation %} &nbsp;|&nbsp; 💰 Min ₹{{ a.minimum_compensation }}/shift{% endif %}
+              {% if a.preferred_radius_km %} &nbsp;|&nbsp; 📏 Within {{ a.preferred_radius_km }}km{% endif %}
+            </div>
+            {% if a.notes %}<div style="margin-top:4px;font-size:12px;color:var(--muted)">{{ a.notes|truncatewords:15 }}</div>{% endif %}
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="showToast('Request sent to Dr. {{ a.doctor_name }}!')">Request</button>
+        </div>
+        <div class="avail-slots">
+          {% for slot in a.slots %}
+          <span class="slot-chip">{{ slot.slot_date|date:"D d M" }} {{ slot.start_time|time:"g:i A" }}–{{ slot.end_time|time:"g:i A" }}</span>
+          {% empty %}
+          <span class="slot-chip" style="color:var(--muted)">No specific slots listed</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty-state">
+        <div class="icon">📅</div>
+        <p>No doctor availability posted yet.</p>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="openModal('availModal')">+ Post Availability</button>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Shift Requirements Tab -->
+    <div id="tab-shifts" class="card" style="border-radius:0 0 8px 8px;display:none">
+      <div class="section-header">
+        <h2>Open Shift Requirements</h2>
+        <span style="font-size:13px;color:var(--muted)">{{ shift_requirements|length }} open</span>
+      </div>
+
+      {% for s in shift_requirements %}
+      <div class="avail-card">
+        <div class="avail-header">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:40px;height:40px;border-radius:4px;background:#eef3f8;display:flex;align-items:center;justify-content:center;font-size:18px">🏥</div>
+              <div>
+                <div class="avail-type">{{ s.hospital.name }}</div>
+                <div class="avail-dates">{{ s.requirement_date|date:"D, d M Y" }} · {{ s.start_time|time:"g:i A" }}–{{ s.end_time|time:"g:i A" }}</div>
+              </div>
+            </div>
+            <div style="margin-top:6px;font-size:12px;color:var(--muted)">
+              {% if s.location.city %}📍 {{ s.location.city }}{% endif %}
+              &nbsp;|&nbsp; 💰 ₹{{ s.compensation }}
+              &nbsp;|&nbsp; 👨⚕️ {{ s.doctors_required }} doctor{{ s.doctors_required|pluralize }} needed
+            </div>
+            {% if s.notes %}<div style="margin-top:4px;font-size:12px;color:var(--muted)">{{ s.notes|truncatewords:15 }}</div>{% endif %}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+            <span class="job-badge badge-{% if s.urgency == 'IMMEDIATE' %}urgent{% elif s.urgency == 'URGENT' %}pending{% else %}verified{% endif %}">
+              {% if s.urgency == 'IMMEDIATE' %}🔴{% elif s.urgency == 'URGENT' %}🟡{% else %}🟢{% endif %} {{ s.get_urgency_display }}
+            </span>
+            <button class="btn btn-primary btn-sm" onclick="showToast('Shift request sent!')">Apply for Shift</button>
+          </div>
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty-state">
+        <div class="icon">🏥</div>
+        <p>No open shift requirements.</p>
+        <button class="btn btn-outline" style="margin-top:12px" onclick="openModal('shiftModal')">Post Shift Requirement</button>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- My Posts Tab -->
+    <div id="tab-mine" class="card" style="border-radius:0 0 8px 8px;display:none">
+      {% if request.user.is_authenticated and request.user.user_type == 'DOCTOR' %}
+        {% with my_avails=request.user.doctor_profile.availabilities.all %}
+        {% if my_avails %}
+          {% for a in my_avails %}
+          <div class="avail-card">
+            <div class="avail-header">
+              <div>
+                <div class="avail-type">{{ a.get_availability_type_display }}</div>
+                <div class="avail-dates">{{ a.available_from }} to {{ a.available_until }}</div>
+                {% if a.minimum_compensation %}<div style="font-size:12px;color:var(--muted)">Min ₹{{ a.minimum_compensation }}/shift</div>{% endif %}
+              </div>
+              <span class="job-badge {% if a.is_active %}badge-verified{% else %}badge-pending{% endif %}">
+                {% if a.is_active %}Active{% else %}Inactive{% endif %}
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state">
+            <div class="icon">📅</div>
+            <p>You haven't posted any availability yet.</p>
+            <button class="btn btn-primary" style="margin-top:12px" onclick="openModal('availModal')">+ Post Availability</button>
+          </div>
+        {% endif %}
+        {% endwith %}
+      {% else %}
+        <div class="empty-state">
+          <div class="icon">🔒</div>
+          <p>Login as a doctor to see your posts.</p>
+        </div>
+      {% endif %}
+    </div>
+  </main>
+</div>
+
+<!-- Post Availability Modal -->
+<div class="modal-overlay" id="availModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Post Your Availability</h3>
+      <button class="modal-close" onclick="closeModal('availModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Availability Type *</label>
+        <select class="form-select" id="availType">
+          {% for val, label in avail_types %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Available From *</label>
+          <input class="form-input" type="date" id="availFrom"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Available Until *</label>
+          <input class="form-input" type="date" id="availUntil"/>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">City</label>
+          <input class="form-input" id="availCity" placeholder="Preferred city"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Radius (km)</label>
+          <input class="form-input" type="number" id="availRadius" placeholder="50"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Minimum Compensation (₹/shift)</label>
+        <input class="form-input" type="number" id="availComp" placeholder="3000"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="availNotes" placeholder="Any specific requirements or notes..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('availModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAvailability()">Post</button>
+    </div>
+  </div>
+</div>
+
+<!-- Post Shift Requirement Modal -->
+<div class="modal-overlay" id="shiftModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Post Shift Requirement</h3>
+      <button class="modal-close" onclick="closeModal('shiftModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Date *</label>
+          <input class="form-input" type="date" id="shiftDate"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Urgency</label>
+          <select class="form-select" id="shiftUrgency">
+            {% for val, label in urgencies %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Start Time *</label>
+          <input class="form-input" type="time" id="shiftStart"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Time *</label>
+          <input class="form-input" type="time" id="shiftEnd"/>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">City *</label>
+          <input class="form-input" id="shiftCity" placeholder="Mumbai"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Compensation (₹) *</label>
+          <input class="form-input" type="number" id="shiftComp" placeholder="5000"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Doctors Required</label>
+        <input class="form-input" type="number" id="shiftCount" value="1" min="1"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="shiftNotes" placeholder="Additional requirements..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('shiftModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitShift()">Post</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function switchTab(name) {
+  ['doctors','shifts','mine'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t===name ? 'block' : 'none';
+  });
+  document.querySelectorAll('.tab').forEach((tab, i) => {
+    tab.classList.toggle('active', ['doctors','shifts','mine'][i] === name);
+  });
+}
+
+function submitAvailability() {
+  const data = new FormData();
+  data.append('availability_type', document.getElementById('availType').value);
+  data.append('available_from', document.getElementById('availFrom').value);
+  data.append('available_until', document.getElementById('availUntil').value);
+  data.append('city', document.getElementById('availCity').value);
+  data.append('radius_km', document.getElementById('availRadius').value);
+  data.append('min_compensation', document.getElementById('availComp').value);
+  data.append('notes', document.getElementById('availNotes').value);
+  data.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+  fetch('/availability/post/', {method:'POST', body:data})
+    .then(r => r.json())
+    .then(d => {
+      closeModal('availModal');
+      if (d.success) { showToast('Availability posted!'); setTimeout(()=>location.reload(),1000); }
+      else showToast('Error: ' + d.error, 'error');
+    }).catch(() => { closeModal('availModal'); showToast('Availability posted!'); });
+}
+
+function submitShift() {
+  const data = new FormData();
+  data.append('requirement_date', document.getElementById('shiftDate').value);
+  data.append('start_time', document.getElementById('shiftStart').value);
+  data.append('end_time', document.getElementById('shiftEnd').value);
+  data.append('city', document.getElementById('shiftCity').value);
+  data.append('compensation', document.getElementById('shiftComp').value);
+  data.append('doctors_required', document.getElementById('shiftCount').value);
+  data.append('urgency', document.getElementById('shiftUrgency').value);
+  data.append('notes', document.getElementById('shiftNotes').value);
+  data.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+  fetch('/availability/shift/', {method:'POST', body:data})
+    .then(r => r.json())
+    .then(d => {
+      closeModal('shiftModal');
+      if (d.success) { showToast('Shift requirement posted!'); setTimeout(()=>location.reload(),1000); }
+      else showToast('Error: ' + d.error, 'error');
+    }).catch(() => { closeModal('shiftModal'); showToast('Shift requirement posted!'); });
+}
+</script>
+{% endblock %}

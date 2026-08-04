@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Doctor Network — DocConnect{% endblock %}
+{% block nav_network %}active{% endblock %}
+
+{% block content %}
+<div class="layout layout-2col">
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar-left">
+    <div class="card">
+      <div class="card-body" style="padding:12px 16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:12px">Filter Doctors</div>
+        <form method="get" action="/network/" id="filterForm">
+          <div class="form-group">
+            <label class="form-label">Search</label>
+            <input class="form-input" name="q" placeholder="Name, specialization..." value="{{ search }}"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">City</label>
+            <input class="form-input" name="city" placeholder="e.g. Mumbai" value="{{ city_filter }}"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Min Experience (years)</label>
+            <input class="form-input" type="number" name="exp" min="0" max="50" placeholder="0" value="{{ exp_filter }}"/>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="checkbox" name="verified" value="1" {% if verified_only %}checked{% endif %}/> Verified only
+            </label>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="checkbox" name="open" value="1"/> Open to opportunities
+            </label>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%">Apply Filters</button>
+          {% if search or city_filter or exp_filter or verified_only %}
+          <a href="/network/" class="btn btn-outline" style="width:100%;margin-top:6px;text-align:center;display:block">Clear Filters</a>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+    <div class="card" style="margin-bottom:8px">
+      <div style="padding:12px 16px;display:flex;gap:8px">
+        <input class="form-input" id="searchInput" placeholder="Search by name, specialization, hospital..." value="{{ search }}" style="flex:1"/>
+        <button class="btn btn-primary" onclick="document.getElementById('filterForm').submit()">Search</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-header">
+        <h2>Verified Doctors</h2>
+        <span style="font-size:13px;color:var(--muted)">{{ total }} result{{ total|pluralize }}</span>
+      </div>
+
+      {% for doc in doctors %}
+      <div class="doctor-card">
+        <div class="doctor-avatar" style="background:{{ doc.color }}">{{ doc.initials }}</div>
+        <div class="doctor-info">
+          <div class="doctor-name">Dr. {{ doc.full_name }}</div>
+          <div class="doctor-spec">{{ doc.headline|default:"Doctor" }}</div>
+          <div class="doctor-meta">
+            {{ doc.experience_years }} yrs exp
+            {% if doc.professional_location.city %} · {{ doc.professional_location.city }}{% endif %}
+          </div>
+          <span class="job-badge badge-{{ doc.verification_status|lower }}">
+            {% if doc.verification_status == 'VERIFIED' %}✓ NMC Verified
+            {% elif doc.verification_status == 'PENDING' %}⏳ Pending
+            {% else %}Unverified{% endif %}
+          </span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="connect-btn" onclick="showToast('Connection request sent!')">+ Connect</button>
+          <button class="connect-btn" style="border-color:var(--muted);color:var(--muted)" onclick="window.location.href='/messaging/'">Message</button>
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty-state">
+        <div class="icon">👨⚕️</div>
+        <p>No doctors found{% if search %} for "{{ search }}"{% endif %}.</p>
+        {% if search or verified_only or exp_filter %}
+        <a href="/network/" class="btn btn-outline" style="margin-top:12px">Clear Filters</a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('searchInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('filterForm').submit();
+});
+</script>
+{% endblock %}

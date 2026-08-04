@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Join DocConnect</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f2ef; min-height: 100vh; display: flex; flex-direction: column; }
+    a { text-decoration: none; color: inherit; }
+    .nav { background: #fff; border-bottom: 1px solid #0000001a; height: 52px; display: flex; align-items: center; padding: 0 24px; }
+    .nav-logo { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 22px; color: #0a66c2; }
+    .nav-logo-icon { width: 34px; height: 34px; background: #0a66c2; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 16px; }
+    .page { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 16px; }
+    .card { background: #fff; border: 1px solid #0000001a; border-radius: 8px; width: 100%; max-width: 440px; padding: 32px; }
+    h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+    .subtitle { font-size: 14px; color: #00000099; margin-bottom: 24px; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid #0000001a; border-radius: 4px; font-size: 15px; outline: none; transition: border-color 0.15s; background: #fff; }
+    input:focus, select:focus { border-color: #0a66c2; box-shadow: 0 0 0 1px #0a66c2; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn { width: 100%; padding: 12px; background: #0a66c2; color: #fff; border: none; border-radius: 24px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 8px; transition: background 0.15s; }
+    .btn:hover { background: #004182; }
+    .error { background: #fce8e6; color: #cc1016; padding: 10px 14px; border-radius: 4px; font-size: 13px; margin-bottom: 16px; }
+    .terms { font-size: 12px; color: #00000099; margin-top: 16px; text-align: center; line-height: 1.5; }
+    .terms a { color: #0a66c2; }
+    .login-link { text-align: center; font-size: 14px; color: #00000099; margin-top: 20px; }
+    .login-link a { color: #0a66c2; font-weight: 600; }
+    .login-link a:hover { text-decoration: underline; }
+    .hint { font-size: 12px; color: #00000099; margin-top: 4px; }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-icon">D</div>
+    DocConnect
+  </a>
+</nav>
+<div class="page">
+  <div class="card">
+    <h1>Join DocConnect</h1>
+    <p class="subtitle">India's verified professional network for doctors</p>
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="row">
+        <div class="form-group">
+          <label for="first_name">First Name</label>
+          <input type="text" id="first_name" name="first_name" placeholder="First name" required autofocus/>
+        </div>
+        <div class="form-group">
+          <label for="last_name">Last Name</label>
+          <input type="text" id="last_name" name="last_name" placeholder="Last name" required/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="phone">Phone Number</label>
+        <input type="tel" id="phone" name="phone" placeholder="10-digit mobile number" maxlength="10" required/>
+      </div>
+      <div class="form-group">
+        <label for="email">Email (optional)</label>
+        <input type="email" id="email" name="email" placeholder="your@email.com"/>
+      </div>
+      <div class="form-group">
+        <label for="user_type">I am a</label>
+        <select id="user_type" name="user_type">
+          <option value="DOCTOR">Doctor (MBBS / MD / MS)</option>
+          <option value="HOSPITAL_ADMIN">Hospital Administrator</option>
+          <option value="HOSPITAL_HR">Hospital HR</option>
+        </select>
+      </div>
+      <div class="row">
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="Min 8 characters" required/>
+        </div>
+        <div class="form-group">
+          <label for="confirm_password">Confirm Password</label>
+          <input type="password" id="confirm_password" name="confirm_password" placeholder="Repeat password" required/>
+        </div>
+      </div>
+      <button type="submit" class="btn">Create Account</button>
+    </form>
+
+    <p class="terms">
+      By joining, you agree to DocConnect's <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
+    </p>
+
+    <div class="login-link">
+      Already on DocConnect? <a href="/login/">Sign in</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>

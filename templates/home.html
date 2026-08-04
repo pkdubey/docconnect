@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}Home — DocConnect{% endblock %}
+{% block nav_home %}active{% endblock %}
+
+{% block content %}
+<div class="layout">
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar-left">
+    <div class="card" style="margin-bottom:8px">
+      <div class="profile-card-banner"></div>
+      {% if request.user.is_authenticated and request.user.user_type == 'DOCTOR' %}
+        {% with dp=request.user.doctor_profile %}
+        <div class="profile-card-avatar" style="background:var(--blue);color:#fff;font-size:22px;font-weight:700">{{ dp.first_name|first|upper }}{{ dp.last_name|first|upper }}</div>
+        {% endwith %}
+      {% elif request.user.is_authenticated %}
+        <div class="profile-card-avatar" style="background:var(--blue);color:#fff;font-size:16px;font-weight:700">{{ request.user.get_user_type_display|slice:":2"|upper }}</div>
+      {% else %}
+        <div class="profile-card-avatar" style="background:#ccc;font-size:28px">&#128104;&#8205;&#9877;&#65039;</div>
+      {% endif %}
+      <div class="profile-card-info">
+        <div class="profile-card-name">
+          {% if request.user.is_authenticated %}
+            {% if request.user.user_type == 'DOCTOR' %}
+              {% with dp=request.user.doctor_profile %}Dr. {{ dp.first_name }} {{ dp.last_name }}{% endwith %}
+            {% else %}
+              {{ request.user.get_user_type_display }}
+            {% endif %}
+          {% else %}
+            Welcome to DocConnect
+          {% endif %}
+        </div>
+        <div class="profile-card-sub">
+          {% if request.user.is_authenticated and request.user.user_type == 'DOCTOR' %}
+            {% with dp=request.user.doctor_profile %}
+              {{ dp.headline|default:"Doctor" }}
+              {% if dp.professional_location.city %} &middot; {{ dp.professional_location.city }}{% endif %}
+            {% endwith %}
+          {% elif request.user.is_authenticated %}
+            {{ request.user.email|default:request.user.phone }}
+          {% else %}
+            Verified Professional Network for Doctors
+          {% endif %}
+        </div>
+        <div class="profile-card-sub" style="margin-top:4px">
+          {% if request.user.is_authenticated and request.user.user_type == 'DOCTOR' %}
+            {% with dp=request.user.doctor_profile %}
+              {% if dp.verification_status == 'VERIFIED' %}
+                <span class="job-badge badge-verified">&#10003; NMC Verified</span>
+              {% elif dp.verification_status == 'PENDING' %}
+                <span class="job-badge badge-pending">Verification Pending</span>
+              {% else %}
+                <span class="job-badge" style="background:#f3f2ef;color:#666">Unverified</span>
+              {% endif %}
+            {% endwith %}
+          {% endif %}
+        </div>
+        <hr class="profile-card-divider"/>
+        <div class="profile-card-stat"><span>Verified Doctors</span><span>{{ stats.doctors }}</span></div>
+        <div class="profile-card-stat"><span>Verified Hospitals</span><span>{{ stats.hospitals }}</span></div>
+        <div class="profile-card-stat"><span>Open Jobs</span><span>{{ stats.jobs }}</span></div>
+      </div>
+      <div class="profile-card-premium">&#11088; Try DocConnect Premium</div>
+    </div>
+
+    <div class="card">
+      <div class="card-body" style="padding:12px 16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">Quick Links</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <a href="/jobs/" style="font-size:13px;color:var(--blue)">&#128188; Browse Jobs</a>
+          <a href="/availability/" style="font-size:13px;color:var(--blue)">&#128197; Post Availability</a>
+          <a href="/network/" style="font-size:13px;color:var(--blue)">&#128101; Find Doctors</a>
+          <a href="/hospitals/" style="font-size:13px;color:var(--blue)">&#127973; Hospitals</a>
+          <a href="/api/docs" style="font-size:13px;color:var(--blue)">&#128214; API Docs</a>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN FEED -->
+  <main>
+    <div class="card" style="margin-bottom:8px">
+      <div class="post-box">
+        {% if request.user.is_authenticated and request.user.user_type == 'DOCTOR' %}
+          {% with dp=request.user.doctor_profile %}
+          <div class="post-box-avatar" style="background:var(--blue);font-size:16px;font-weight:700">{{ dp.first_name|first|upper }}{{ dp.last_name|first|upper }}</div>
+          {% endwith %}
+        {% elif request.user.is_authenticated %}
+          <div class="post-box-avatar" style="background:var(--blue);font-size:13px;font-weight:700">{{ request.user.get_user_type_display|slice:":2"|upper }}</div>
+        {% else %}
+          <div class="post-box-avatar">&#128104;&#8205;&#9877;&#65039;</div>
+        {% endif %}
+        <button class="post-box-input" onclick="openModal('postModal')">Share a clinical case, update or article...</button>
+      </div>
+      <div class="post-actions">
+        <button class="post-action-btn" onclick="openModal('postModal')">&#128247; Photo</button>
+        <button class="post-action-btn" onclick="openModal('postModal')">&#129658; Case</button>
+        <button class="post-action-btn" onclick="openModal('postModal')">&#128221; Article</button>
+        <button class="post-action-btn" onclick="openModal('postModal')">&#128197; Availability</button>
+      </div>
+    </div>
+
+    <!-- Urgent Jobs as Feed Cards -->
+    {% for job in urgent_jobs %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="post">
+        <div class="post-header">
+          <div class="post-avatar" style="background:#057642;border-radius:4px">&#127973;</div>
+          <div class="post-meta">
+            <div class="post-author">{{ job.hospital.name }} <span class="job-badge badge-verified" style="font-size:11px">&#10003; Verified Hospital</span></div>
+            <div class="post-author-sub">{{ job.hospital.type }} &middot; {{ job.location.city|default:"" }}</div>
+            <div class="post-time">{{ job.published_at|timesince|default:"Recently" }} ago</div>
+          </div>
+        </div>
+        <div class="post-content">
+          &#128680; <strong>{{ job.title }}</strong><br/>
+          {{ job.description|truncatewords:30 }}<br/><br/>
+          &#128205; {{ job.location.city|default:"" }}{% if job.location.state %}, {{ job.location.state }}{% endif %}
+          {% if job.salary_min %} &nbsp;|&nbsp; &#128176; &#8377;{{ job.salary_min }}{% endif %}
+          &nbsp;|&nbsp; &#128197; {{ job.get_job_type_display }}<br/><br/>
+          <a href="/jobs/" class="btn btn-primary btn-sm" style="margin-top:8px">View &amp; Apply &rarr;</a>
+        </div>
+        <div class="post-reactions">
+          <button class="post-reaction-btn">&#128077; Like</button>
+          <button class="post-reaction-btn">&#128172; Comment</button>
+          <button class="post-reaction-btn">&#128228; Share</button>
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="post">
+        <div class="post-header">
+          <div class="post-avatar" style="background:#057642;border-radius:4px">&#127973;</div>
+          <div class="post-meta">
+            <div class="post-author">DocConnect <span class="job-badge badge-verified" style="font-size:11px">&#10003; Official</span></div>
+            <div class="post-author-sub">Platform Update</div>
+            <div class="post-time">Just now</div>
+          </div>
+        </div>
+        <div class="post-content">
+          &#128075; Welcome to DocConnect — India's verified professional network for doctors.<br/><br/>
+          Start by <a href="/network/">connecting with doctors</a>, <a href="/jobs/">browsing jobs</a>, or <a href="/availability/">posting your availability</a>.
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </main>
+
+  <!-- RIGHT SIDEBAR -->
+  <aside class="sidebar-right">
+    {% if urgent_jobs %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="section-header">
+        <h2>&#128680; Urgent Openings</h2>
+        <a href="/jobs/?urgent=1" class="see-all">See all</a>
+      </div>
+      {% for job in urgent_jobs %}
+      <div class="job-card">
+        <div class="job-logo">&#127973;</div>
+        <div class="job-info">
+          <div class="job-title"><a href="/jobs/">{{ job.title }}</a></div>
+          <div class="job-hospital">{{ job.hospital.name }}</div>
+          <div class="job-meta">
+            {% if job.salary_min %}&#8377;{{ job.salary_min }} &middot; {% endif %}{{ job.get_job_type_display }}
+          </div>
+          <span class="job-badge badge-urgent">&#128308; Urgent</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if suggested_doctors %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="section-header">
+        <h2>&#128101; People you may know</h2>
+        <a href="/network/" class="see-all">See all</a>
+      </div>
+      {% for doc in suggested_doctors %}
+      <div class="doctor-card">
+        <div class="doctor-avatar" style="background:{{ doc.color }}">{{ doc.initials }}</div>
+        <div class="doctor-info">
+          <div class="doctor-name">Dr. {{ doc.full_name }}</div>
+          <div class="doctor-spec">{{ doc.headline|default:"Doctor" }}</div>
+          <div class="doctor-meta">
+            {% if doc.professional_location.city %}{{ doc.professional_location.city }}{% endif %}
+          </div>
+        </div>
+        <button class="connect-btn" onclick="showToast('Connection request sent!')">+ Connect</button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-body" style="padding:12px 16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">DEVELOPER</div>
+        <a href="/api/docs" style="display:block;font-size:13px;color:var(--blue);margin-bottom:4px">&#128214; Swagger API Docs</a>
+        <a href="/api/redoc" style="display:block;font-size:13px;color:var(--blue);margin-bottom:4px">&#128196; ReDoc</a>
+        <a href="/health" style="display:block;font-size:13px;color:var(--blue)">&#128154; Health Check</a>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- Post Modal -->
+<div class="modal-overlay" id="postModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Create a post</h3>
+      <button class="modal-close" onclick="closeModal('postModal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <textarea class="form-textarea" placeholder="Share a clinical case, update, or article..." style="min-height:120px;border:none;font-size:15px;resize:none;outline:none;width:100%"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="post-action-btn" style="flex:none">&#128247; Photo</button>
+        <button class="post-action-btn" style="flex:none">&#129658; Case</button>
+        <button class="post-action-btn" style="flex:none">&#128221; Article</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('postModal');showToast('Post shared!')">Post</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,435 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Dashboard | DocConnect Admin{% endblock %}
+
+{% block content_title %}<h1>Dashboard</h1>{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  /* Stats Grid */
+  .dash-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    transition: box-shadow 0.2s;
+  }
+  .stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .stat-icon {
+    width: 48px; height: 48px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+  }
+  .stat-icon.blue { background: #e8f0fe; }
+  .stat-icon.green { background: #e6f4ea; }
+  .stat-icon.orange { background: #fff3e0; }
+  .stat-icon.red { background: #fce8e6; }
+  .stat-icon.purple { background: #f3e8fd; }
+  .stat-icon.teal { background: #e0f7fa; }
+  .stat-num { font-size: 28px; font-weight: 800; color: #1a1a1a; line-height: 1; }
+  .stat-label { font-size: 12px; color: #666; margin-top: 4px; font-weight: 500; }
+
+  /* Section title */
+  .dash-section-title {
+    font-size: 16px; font-weight: 700; color: #1a1a1a;
+    margin: 0 0 12px; display: flex; align-items: center; gap: 8px;
+  }
+
+  /* App grid */
+  .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
+
+  /* Module card */
+  .module-card {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+    overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .module-card-header {
+    padding: 14px 18px; border-bottom: 1px solid #f0f0f0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .module-card-title { font-size: 14px; font-weight: 700; color: #1a1a1a; display: flex; align-items: center; gap: 8px; }
+  .module-card-title .badge {
+    font-size: 11px; font-weight: 600; padding: 2px 8px;
+    border-radius: 10px; background: #e8f0fe; color: #0a66c2;
+  }
+  .module-card-link { font-size: 12px; color: #0a66c2; font-weight: 600; text-decoration: none; }
+  .module-card-link:hover { text-decoration: underline; }
+  .module-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 18px; border-bottom: 1px solid #f8f8f8; font-size: 13px;
+    transition: background 0.15s;
+  }
+  .module-row:last-child { border-bottom: none; }
+  .module-row:hover { background: #f8f9fa; }
+  .module-row a { color: #0a66c2; font-weight: 500; text-decoration: none; }
+  .module-row a:hover { text-decoration: underline; }
+  .module-row-actions { display: flex; gap: 8px; }
+  .module-row-actions a {
+    font-size: 11px; padding: 3px 10px; border-radius: 4px;
+    background: #f3f2ef; color: #444; text-decoration: none; font-weight: 600;
+    transition: background 0.15s;
+  }
+  .module-row-actions a:hover { background: #e0e0e0; }
+  .module-row-actions a.add { background: #e6f4ea; color: #057642; }
+  .module-row-actions a.add:hover { background: #c8e6c9; }
+
+  /* Recent activity */
+  .activity-card {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+    overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 24px;
+  }
+  .activity-header { padding: 14px 18px; border-bottom: 1px solid #f0f0f0; font-size: 14px; font-weight: 700; }
+  .activity-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 18px; border-bottom: 1px solid #f8f8f8; font-size: 13px;
+  }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-dot {
+    width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0;
+  }
+  .activity-dot.add { background: #057642; }
+  .activity-dot.change { background: #0a66c2; }
+  .activity-dot.delete { background: #cc1016; }
+  .activity-text { flex: 1; color: #444; line-height: 1.4; }
+  .activity-text a { color: #0a66c2; font-weight: 600; text-decoration: none; }
+  .activity-text a:hover { text-decoration: underline; }
+  .activity-time { font-size: 11px; color: #999; white-space: nowrap; }
+
+  /* Quick actions */
+  .quick-actions {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 24px;
+  }
+  .quick-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    text-decoration: none; transition: all 0.15s; border: 1.5px solid transparent;
+  }
+  .quick-btn.primary { background: #0a66c2; color: #fff; }
+  .quick-btn.primary:hover { background: #004182; }
+  .quick-btn.outline { background: #fff; color: #0a66c2; border-color: #0a66c2; }
+  .quick-btn.outline:hover { background: #eef3f8; }
+  .quick-btn.green { background: #057642; color: #fff; }
+  .quick-btn.green:hover { background: #045d32; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Stats Row -->
+<div class="dash-stats">
+  <div class="stat-card">
+    <div class="stat-icon blue">&#128101;</div>
+    <div>
+      <div class="stat-num" id="stat-doctors">—</div>
+      <div class="stat-label">Total Doctors</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon green">&#127973;</div>
+    <div>
+      <div class="stat-num" id="stat-hospitals">—</div>
+      <div class="stat-label">Hospitals</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon orange">&#128188;</div>
+    <div>
+      <div class="stat-num" id="stat-jobs">—</div>
+      <div class="stat-label">Active Jobs</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon red">&#128680;</div>
+    <div>
+      <div class="stat-num" id="stat-urgent">—</div>
+      <div class="stat-label">Urgent Jobs</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon purple">&#128203;</div>
+    <div>
+      <div class="stat-num" id="stat-applications">—</div>
+      <div class="stat-label">Applications</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon teal">&#128197;</div>
+    <div>
+      <div class="stat-num" id="stat-availability">—</div>
+      <div class="stat-label">Availabilities</div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-actions">
+  <a href="{% url 'admin:accounts_user_add' %}" class="quick-btn primary">+ Add User</a>
+  <a href="{% url 'admin:doctors_doctorprofile_changelist' %}" class="quick-btn outline">&#128101; Doctors</a>
+  <a href="{% url 'admin:hospitals_hospital_changelist' %}" class="quick-btn outline">&#127973; Hospitals</a>
+  <a href="{% url 'admin:jobs_jobpost_changelist' %}" class="quick-btn outline">&#128188; Jobs</a>
+  <a href="{% url 'admin:accounts_user_changelist' %}" class="quick-btn outline">&#128100; Users</a>
+  <a href="/" class="quick-btn green">&#127968; View Site</a>
+</div>
+
+<!-- Module Grid -->
+<div class="dash-grid">
+
+  <!-- Accounts -->
+  <div class="module-card">
+    <div class="module-card-header">
+      <div class="module-card-title">&#128100; Accounts</div>
+      <a href="{% url 'admin:accounts_user_changelist' %}" class="module-card-link">View all &rarr;</a>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:accounts_user_changelist' %}">Users</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:accounts_user_changelist' %}">List</a>
+        <a href="{% url 'admin:accounts_user_add' %}" class="add">+ Add</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:accounts_otpchallenge_changelist' %}">OTP Challenges</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:accounts_otpchallenge_changelist' %}">List</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:accounts_refreshsession_changelist' %}">Refresh Sessions</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:accounts_refreshsession_changelist' %}">List</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Doctors -->
+  <div class="module-card">
+    <div class="module-card-header">
+      <div class="module-card-title">&#128101; Doctors</div>
+      <a href="{% url 'admin:doctors_doctorprofile_changelist' %}" class="module-card-link">View all &rarr;</a>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:doctors_doctorprofile_changelist' %}">Doctor Profiles</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:doctors_doctorprofile_changelist' %}">List</a>
+        <a href="{% url 'admin:doctors_doctorprofile_add' %}" class="add">+ Add</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:doctors_doctorregistration_changelist' %}">Registrations</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:doctors_doctorregistration_changelist' %}">List</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:doctors_doctorqualification_changelist' %}">Qualifications</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:doctors_doctorqualification_changelist' %}">List</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:doctors_doctorexperience_changelist' %}">Experiences</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:doctors_doctorexperience_changelist' %}">List</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hospitals -->
+  <div class="module-card">
+    <div class="module-card-header">
+      <div class="module-card-title">&#127973; Hospitals</div>
+      <a href="{% url 'admin:hospitals_hospital_changelist' %}" class="module-card-link">View all &rarr;</a>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:hospitals_hospital_changelist' %}">Hospitals</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:hospitals_hospital_changelist' %}">List</a>
+        <a href="{% url 'admin:hospitals_hospital_add' %}" class="add">+ Add</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:hospitals_hospitalbranch_changelist' %}">Branches</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:hospitals_hospitalbranch_changelist' %}">List</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:hospitals_hospitaldepartment_changelist' %}">Departments</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:hospitals_hospitaldepartment_changelist' %}">List</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:hospitals_hospitaluser_changelist' %}">Hospital Users</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:hospitals_hospitaluser_changelist' %}">List</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Jobs -->
+  <div class="module-card">
+    <div class="module-card-header">
+      <div class="module-card-title">&#128188; Jobs</div>
+      <a href="{% url 'admin:jobs_jobpost_changelist' %}" class="module-card-link">View all &rarr;</a>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:jobs_jobpost_changelist' %}">Job Posts</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:jobs_jobpost_changelist' %}">List</a>
+        <a href="{% url 'admin:jobs_jobpost_add' %}" class="add">+ Add</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:jobs_jobapplication_changelist' %}">Applications</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:jobs_jobapplication_changelist' %}">List</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:jobs_applicationhistory_changelist' %}">Application History</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:jobs_applicationhistory_changelist' %}">List</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Availability & Shifts -->
+  <div class="module-card">
+    <div class="module-card-header">
+      <div class="module-card-title">&#128197; Availability &amp; Shifts</div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:availability_doctoravailability_changelist' %}">Doctor Availabilities</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:availability_doctoravailability_changelist' %}">List</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:availability_availabilityslot_changelist' %}">Availability Slots</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:availability_availabilityslot_changelist' %}">List</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:shifts_shiftrequirement_changelist' %}">Shift Requirements</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:shifts_shiftrequirement_changelist' %}">List</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:shifts_shiftrequest_changelist' %}">Shift Requests</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:shifts_shiftrequest_changelist' %}">List</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Core & Notifications -->
+  <div class="module-card">
+    <div class="module-card-header">
+      <div class="module-card-title">&#9881;&#65039; Core &amp; Notifications</div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:core_specialization_changelist' %}">Specializations</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:core_specialization_changelist' %}">List</a>
+        <a href="{% url 'admin:core_specialization_add' %}" class="add">+ Add</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:core_qualification_changelist' %}">Qualifications</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:core_qualification_changelist' %}">List</a>
+        <a href="{% url 'admin:core_qualification_add' %}" class="add">+ Add</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:core_council_changelist' %}">Medical Councils</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:core_council_changelist' %}">List</a>
+        <a href="{% url 'admin:core_council_add' %}" class="add">+ Add</a>
+      </div>
+    </div>
+    <div class="module-row">
+      <a href="{% url 'admin:notifications_notification_changelist' %}">Notifications</a>
+      <div class="module-row-actions">
+        <a href="{% url 'admin:notifications_notification_changelist' %}">List</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Recent Actions -->
+<div class="activity-card">
+  <div class="activity-header">&#128336; Recent Actions</div>
+  {% load log %}
+  {% get_admin_log 15 as admin_log for_user user %}
+  {% if admin_log %}
+    {% for entry in admin_log %}
+    <div class="activity-item">
+      {% if entry.is_addition %}
+        <div class="activity-dot add"></div>
+      {% elif entry.is_change %}
+        <div class="activity-dot change"></div>
+      {% else %}
+        <div class="activity-dot delete"></div>
+      {% endif %}
+      <div class="activity-text">
+        {% if entry.is_deletion %}
+          <strong>Deleted</strong> {{ entry.object_repr }}
+        {% else %}
+          {% if entry.is_addition %}<strong>Added</strong>{% else %}<strong>Changed</strong>{% endif %}
+          <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
+        {% endif %}
+        &mdash; <span style="color:#999">{{ entry.content_type.app_label }}.{{ entry.content_type.model }}</span>
+      </div>
+      <div class="activity-time">{{ entry.action_time|timesince }} ago</div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="activity-item" style="color:#999;justify-content:center">No recent actions.</div>
+  {% endif %}
+</div>
+
+<script>
+// Fetch stats via Django admin changelist counts
+(function() {
+  const urls = [
+    { id: 'stat-doctors',      url: '{% url "admin:doctors_doctorprofile_changelist" %}' },
+    { id: 'stat-hospitals',    url: '{% url "admin:hospitals_hospital_changelist" %}' },
+    { id: 'stat-jobs',         url: '{% url "admin:jobs_jobpost_changelist" %}?status__exact=PUBLISHED' },
+    { id: 'stat-urgent',       url: '{% url "admin:jobs_jobpost_changelist" %}?is_urgent__exact=1' },
+    { id: 'stat-applications', url: '{% url "admin:jobs_jobapplication_changelist" %}' },
+    { id: 'stat-availability', url: '{% url "admin:availability_doctoravailability_changelist" %}?is_active__exact=1' },
+  ];
+  // Use Django ORM via inline script data
+  const stats = {
+    'stat-doctors':      {{ doctors_count }},
+    'stat-hospitals':    {{ hospitals_count }},
+    'stat-jobs':         {{ jobs_count }},
+    'stat-urgent':       {{ urgent_count }},
+    'stat-applications': {{ applications_count }},
+    'stat-availability': {{ availability_count }},
+  };
+  Object.entries(stats).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  });
+})();
+</script>
+{% endblock %}
