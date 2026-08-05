@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title }} — DocConnect{% endblock %}
+{% block nav_jobs %}active{% endblock %}
+
+{% block content %}
+<div class="layout layout-2col" style="max-width:900px;grid-template-columns:1fr 280px">
+
+  <!-- MAIN -->
+  <main>
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="width:64px;height:64px;border-radius:8px;background:#eef3f8;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">🏥</div>
+          <div style="flex:1">
+            <h1 style="font-size:20px;font-weight:800">{{ job.title }}</h1>
+            <div style="font-size:14px;color:var(--text);margin-top:2px">{{ job.hospital.name }}</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:4px">
+              📍 {{ job.location.city|default:"" }}{% if job.location.state %}, {{ job.location.state }}{% endif %}
+              &nbsp;·&nbsp; {{ job.get_job_type_display }}
+              &nbsp;·&nbsp; {{ job.get_shift_type_display }} shift
+            </div>
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+              {% if job.is_urgent %}<span class="job-badge badge-urgent">🔴 Urgent</span>{% endif %}
+              <span class="job-badge badge-{{ job.job_type|lower }}">{{ job.get_job_type_display }}</span>
+              {% if job.hospital.verification_status == 'VERIFIED' %}
+                <span class="job-badge badge-verified">✓ Verified Hospital</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Salary & Experience row -->
+        <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;margin-top:16px;overflow:hidden">
+          <div style="flex:1;padding:12px;text-align:center;border-right:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Salary</div>
+            <div style="font-size:15px;font-weight:700;margin-top:4px">
+              {% if job.salary_visibility == 'PUBLIC' and job.salary_min %}
+                ₹{{ job.salary_min }}{% if job.salary_max %}–{{ job.salary_max }}{% endif %}
+              {% elif job.salary_visibility == 'ON_REQUEST' %}
+                On Request
+              {% else %}
+                Not disclosed
+              {% endif %}
+            </div>
+          </div>
+          <div style="flex:1;padding:12px;text-align:center;border-right:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Experience</div>
+            <div style="font-size:15px;font-weight:700;margin-top:4px">
+              {{ job.experience_min_years }}+{% if job.experience_max_years %} – {{ job.experience_max_years }}{% endif %} yrs
+            </div>
+          </div>
+          <div style="flex:1;padding:12px;text-align:center;border-right:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Positions</div>
+            <div style="font-size:15px;font-weight:700;margin-top:4px">{{ job.positions }}</div>
+          </div>
+          <div style="flex:1;padding:12px;text-align:center">
+            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Posted</div>
+            <div style="font-size:15px;font-weight:700;margin-top:4px">{{ job.published_at|timesince|default:"Recently" }} ago</div>
+          </div>
+        </div>
+
+        <!-- Apply button -->
+        <div style="margin-top:16px;display:flex;gap:8px">
+          {% if already_applied %}
+            <span class="btn btn-outline" style="cursor:default">
+              {% if application_status == 'WITHDRAWN' %}↩ Withdrawn
+              {% elif application_status == 'HIRED' %}✅ Hired
+              {% elif application_status == 'REJECTED' %}❌ Rejected
+              {% else %}✓ Applied — {{ application_status }}{% endif %}
+            </span>
+            {% if application_status != 'HIRED' and application_status != 'REJECTED' and application_status != 'WITHDRAWN' %}
+            <form method="post" action="/jobs/{{ job.id }}/withdraw/">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm" style="border:1.5px solid var(--red);color:var(--red);background:none;border-radius:16px;padding:6px 16px;font-size:14px;font-weight:600;cursor:pointer"
+                      onclick="return confirm('Withdraw application?')">Withdraw</button>
+            </form>
+            {% endif %}
+          {% elif request.user.is_authenticated and request.user.user_type == 'DOCTOR' %}
+            <form method="post" action="/jobs/{{ job.id }}/apply/">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-primary">Apply Now</button>
+            </form>
+          {% elif request.user.is_authenticated %}
+            <span style="font-size:13px;color:var(--muted)">Only doctors can apply for jobs.</span>
+          {% else %}
+            <a href="/login/?next=/jobs/{{ job.id }}/" class="btn btn-primary">Login to Apply</a>
+          {% endif %}
+          <button class="btn btn-outline" onclick="showToast('Job saved!')">🔖 Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Description -->
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">Job Description</div>
+        <div style="font-size:14px;line-height:1.7;white-space:pre-line">{{ job.description }}</div>
+      </div>
+    </div>
+
+    {% if job.responsibilities %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">Responsibilities</div>
+        <div style="font-size:14px;line-height:1.7;white-space:pre-line">{{ job.responsibilities }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if job.requirements %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">Requirements</div>
+        <div style="font-size:14px;line-height:1.7;white-space:pre-line">{{ job.requirements }}</div>
+      </div>
+    </div>
+    {% endif %}
+  </main>
+
+  <!-- RIGHT SIDEBAR -->
+  <aside class="sidebar-right">
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">About the Hospital</div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+          <div style="width:48px;height:48px;border-radius:4px;background:#eef3f8;display:flex;align-items:center;justify-content:center;font-size:22px">🏥</div>
+          <div>
+            <div style="font-weight:700;font-size:14px"><a href="/hospitals/{{ job.hospital.id }}/" style="color:var(--blue)">{{ job.hospital.name }}</a></div>
+            <div style="font-size:12px;color:var(--muted)">{{ job.hospital.get_type_display }}</div>
+          </div>
+        </div>
+        {% if job.hospital.about %}
+        <div style="font-size:13px;color:var(--muted);margin-bottom:8px">{{ job.hospital.about|truncatewords:30 }}</div>
+        {% endif %}
+        <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px">
+          {% if job.hospital.location.city %}
+          <div>📍 {{ job.hospital.location.city }}{% if job.hospital.location.state %}, {{ job.hospital.location.state }}{% endif %}</div>
+          {% endif %}
+          {% if job.hospital.bed_count %}<div>🛏 {{ job.hospital.bed_count }} beds</div>{% endif %}
+          {% if job.hospital.phone %}<div>📞 {{ job.hospital.phone }}</div>{% endif %}
+          {% if job.hospital.website %}<div>🌐 <a href="{{ job.hospital.website }}" style="color:var(--blue)">Website</a></div>{% endif %}
+        </div>
+        <a href="/hospitals/{{ job.hospital.id }}/" class="btn btn-outline btn-sm" style="margin-top:12px;display:block;text-align:center">View Hospital Profile</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="card-title">Job Details</div>
+        <div style="font-size:13px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Type</span><strong>{{ job.get_job_type_display }}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Shift</span><strong>{{ job.get_shift_type_display }}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Positions</span><strong>{{ job.positions }}</strong></div>
+          {% if job.joining_requirement %}
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Joining</span><strong>{{ job.joining_requirement }}</strong></div>
+          {% endif %}
+          {% if job.closing_date %}
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Closes</span><strong>{{ job.closing_date|date:"d M Y" }}</strong></div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </aside>
+
+</div>
+{% endblock %}

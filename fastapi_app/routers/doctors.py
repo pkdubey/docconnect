@@ -1,5 +1,4 @@
-from datetime import date, datetime
-from decimal import Decimal
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -167,12 +166,13 @@ async def search_doctors(
     current_user=Depends(get_current_user),
 ):
     from apps.doctors.models import DoctorProfile
-    from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
+    from django.db.models import Q
 
     qs = DoctorProfile.objects.filter(verification_status='VERIFIED')
     if search:
-        vector = SearchVector('first_name', 'last_name', 'headline')
-        qs = qs.annotate(rank=SearchRank(vector, SearchQuery(search))).filter(rank__gte=0.1).order_by('-rank')
+        qs = qs.filter(
+            Q(first_name__icontains=search) | Q(last_name__icontains=search) | Q(headline__icontains=search)
+        )
     if specialty:
         qs = qs.filter(primary_specialization_id=specialty)
     if city:
@@ -186,9 +186,7 @@ async def search_doctors(
     results = qs[(page - 1) * page_size: page * page_size]
     return {
         "total": total, "page": page, "page_size": page_size,
-        "results": [{"id": str(d.id), "full_name": d.full_name, "headline": d.headline,
-                     "experience_years": float(d.experience_years), "verification_status": d.verification_status}
-                    for d in results],
+        "results": [_profile_dict(d) for d in results],
     }
 
 
@@ -211,10 +209,10 @@ async def add_registration(reg: DoctorRegistrationCreate, current_doctor=Depends
 
 @router.get("/profile/me/registrations/")
 async def list_registrations(current_doctor=Depends(get_current_doctor)):
-    regs = current_doctor.registrations.all()
     return [{"id": str(r.id), "council_id": str(r.council_id), "registration_number": r.registration_number,
              "registration_year": r.registration_year, "is_primary": r.is_primary,
-             "verification_status": r.verification_status} for r in regs]
+             "verification_status": r.verification_status}
+            for r in current_doctor.registrations.all()]
 
 
 # ── Qualifications ────────────────────────────────────────────

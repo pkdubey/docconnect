@@ -8,19 +8,22 @@
 
 ## Table of Contents
 1. [Project Overview](#1-project-overview)
-2. [System Architecture](#2-system-architecture)
-3. [Technology Stack](#3-technology-stack)
-4. [Database Design](#4-database-design)
-5. [API Architecture (FastAPI)](#5-api-architecture-fastapi)
-6. [Project Structure](#6-project-structure)
-7. [Development Setup](#7-development-setup)
-8. [Deployment](#8-deployment)
-9. [API Documentation](#9-api-documentation)
-10. [Security](#10-security)
-11. [Testing](#11-testing)
-12. [Troubleshooting](#12-troubleshooting)
-13. [Roadmap](#13-roadmap)
-14. [Contributing](#14-contributing)
+2. [Module 1 — Doctor Professional Network](#2-module-1--doctor-professional-network)
+3. [Module 2 — Doctor Career Marketplace](#3-module-2--doctor-career-marketplace)
+4. [Module 3 — Doctor Availability Exchange](#4-module-3--doctor-availability-exchange)
+5. [System Architecture](#5-system-architecture)
+6. [Technology Stack](#6-technology-stack)
+7. [Database Design](#7-database-design)
+8. [API Architecture (FastAPI)](#8-api-architecture-fastapi)
+9. [Project Structure](#9-project-structure)
+10. [Development Setup](#10-development-setup)
+11. [Deployment](#11-deployment)
+12. [API Documentation](#12-api-documentation)
+13. [Security](#13-security)
+14. [Testing](#14-testing)
+15. [Troubleshooting](#15-troubleshooting)
+16. [Roadmap](#16-roadmap)
+17. [Contributing](#17-contributing)
 
 ---
 
@@ -38,12 +41,12 @@ DocConnect is a verified professional network exclusively for doctors. It provid
 
 ### 1.2 Core Modules
 
-| Module | Description |
-|--------|-------------|
-| **Doctor Professional Network** | Verified profiles, connections, feed, communities |
-| **Career Marketplace** | Job posting, applications, recruitment CRM |
-| **Availability Exchange** | Doctor availability, urgent requirements, shift management |
-| **Hospital Registration** | Verified hospital/clinic onboarding, branch & department management |
+| Module | Description | Section |
+|--------|-------------|--------|
+| **Doctor Professional Network** | LinkedIn-style verified profiles, connections, feed, specialty communities, messaging | [Section 2](#2-module-1--doctor-professional-network) |
+| **Doctor Career Marketplace** | Hospital onboarding, job posting, one-tap apply, recruitment CRM, AI matching | [Section 3](#3-module-2--doctor-career-marketplace) |
+| **Doctor Availability Exchange** | Doctor availability, urgent shift requirements, doctor matching, shift lifecycle | [Section 4](#4-module-3--doctor-availability-exchange) |
+| **Hospital Registration** | Verified hospital/clinic onboarding, branches, departments, staff management | [Section 3.1](#31-hospital-onboarding) |
 
 ### 1.3 Target Users
 
@@ -120,7 +123,410 @@ python run.py
 
 ---
 
-## 2. System Architecture
+## 2. Module 1 — Doctor Professional Network
+
+> LinkedIn-style verified professional network exclusively for doctors — profiles, connections, feed & specialty communities.
+
+### 2.1 Doctor Profile (LinkedIn-style)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     DOCTOR PROFILE                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  BANNER  (gradient / custom image)                       │  │
+│  │  ┌──────┐  Dr. Arjun Sharma                              │  │
+│  │  │ 👨‍⚕️  │  Cardiologist · 12 yrs exp                     │  │
+│  │  │ Photo│  AIIMS Delhi · Mumbai                          │  │
+│  │  └──────┘  ✅ NMC Verified  🟢 Open to Opportunities     │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  About          Qualifications      Experience                  │
+│  Specialization Clinical Interests  Registrations              │
+│  Connections    Posts & Activity    Availability Badge          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Profile Fields:**
+
+| Field | Description |
+|-------|-------------|
+| `first_name` / `last_name` | Doctor's full name |
+| `headline` | 160-char tagline (e.g. "Cardiologist · AIIMS Delhi · 12 yrs") |
+| `about` | Rich bio / summary |
+| `photo_file_id` | Profile photo stored on AWS S3 |
+| `primary_specialization_id` | Linked to `Specialization` master table |
+| `clinical_interests` | Array of UUID refs to specializations |
+| `professional_location` | JSONB — city, state, pincode, coordinates |
+| `experience_years` | Decimal (e.g. 12.5) |
+| `open_to_opportunities` | Boolean — shows availability badge |
+| `profile_visibility` | `EVERYONE` / `DOCTORS_ONLY` / `CONNECTIONS_ONLY` |
+| `career_visibility` | `VERIFIED_HOSPITALS` / `SELECTED_HOSPITALS` / `HIDDEN` |
+
+### 2.2 Verification System
+
+```
+  UNVERIFIED ──▶ PENDING ──▶ VERIFIED
+                    │
+                    └──▶ REJECTED (with reason)
+```
+
+| Step | Action |
+|------|--------|
+| 1 | Doctor submits NMC / State Council registration number |
+| 2 | System stores `DoctorRegistration` with `council_id` + `registration_number` |
+| 3 | Admin verifies via Django Admin panel |
+| 4 | Status moves to `VERIFIED` — green badge appears on profile |
+| 5 | Rejected profiles get `verification_rejected_reason` |
+
+**Supported Councils:** NMC, MCI, Maharashtra MC, Delhi MC, Karnataka MC, Tamil Nadu MC (extensible via `Council` master table)
+
+**Doctor Qualifications tracked:**
+- Degree (MBBS / MD / MS / DM / MCh / DNB / BDS / MDS / BAMS / BHMS)
+- Institution name
+- Passing year
+- Specialization
+
+**Doctor Experience tracked:**
+- Role / Designation
+- Hospital name & location
+- Start date / End date / Is current
+- Description
+
+### 2.3 Connections & Feed
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Doctor Search | ✅ Live | Full-text search by name, specialty, city, experience |
+| Profile View | ✅ Live | View any verified doctor's profile |
+| Visibility Controls | ✅ Live | Control who sees your profile & career info |
+| Open to Opportunities | ✅ Live | Toggle availability badge visible to hospitals |
+| Feed / Posts | 🔜 Phase 2 | Clinical case sharing, articles, updates |
+| Connections | 🔜 Phase 2 | Send / accept / withdraw connection requests |
+| Endorsements | 🔜 Phase 2 | Peer skill endorsements |
+
+### 2.4 Specialty Communities
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Specialty Groups | 🔜 Phase 2 | Cardiology, Neurology, Pediatrics etc. |
+| Case Discussions | 🔜 Phase 2 | Anonymised clinical case sharing |
+| Second Opinions | 🔜 Phase 2 | Request peer review on complex cases |
+| CME Events | 🔜 Phase 2 | Continuing Medical Education tracking |
+
+### 2.5 Messaging
+
+```
+Doctor A ──▶ Start Conversation ──▶ Doctor B
+                    │
+              Message Types:
+              • TEXT
+              • IMAGE
+              • DOCUMENT
+              • SHIFT_REQUEST (linked to shift)
+              • JOB_REFERRAL (linked to job)
+```
+
+**API Endpoints — Network Module:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/doctors/profile/` | Create doctor profile |
+| GET | `/api/v1/doctors/profile/me/` | Get my profile |
+| PATCH | `/api/v1/doctors/profile/me/` | Update my profile |
+| GET | `/api/v1/doctors/profile/{id}/` | View any doctor's profile |
+| POST | `/api/v1/doctors/profile/me/photo/` | Upload profile photo |
+| GET | `/api/v1/doctors/search/` | Search doctors (name/specialty/city/exp) |
+| POST | `/api/v1/doctors/profile/me/registrations/` | Add NMC registration |
+| GET | `/api/v1/doctors/profile/me/registrations/` | List my registrations |
+| POST | `/api/v1/doctors/profile/me/qualifications/` | Add qualification |
+| GET | `/api/v1/doctors/profile/me/qualifications/` | List qualifications |
+| DELETE | `/api/v1/doctors/profile/me/qualifications/{id}/` | Delete qualification |
+| POST | `/api/v1/doctors/profile/me/experiences/` | Add experience |
+| GET | `/api/v1/doctors/profile/me/experiences/` | List experiences |
+| DELETE | `/api/v1/doctors/profile/me/experiences/{id}/` | Delete experience |
+| POST | `/api/v1/messages/conversations/` | Start a conversation |
+| GET | `/api/v1/messages/conversations/` | List my conversations |
+| GET | `/api/v1/messages/conversations/{id}/messages/` | Get messages |
+| POST | `/api/v1/messages/conversations/{id}/messages/` | Send a message |
+
+---
+
+## 3. Module 2 — Doctor Career Marketplace
+
+> Hospital-side job posting + doctor-side one-tap apply + full recruitment CRM pipeline + AI matching (Phase 2).
+
+### 3.1 Hospital Onboarding
+
+```
+┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
+│  Admin   │──▶│  OTP     │──▶│ Hospital │──▶│ Branches │──▶│ Verified │
+│  Phone   │   │  Verify  │   │ Details  │   │  Depts   │   │ Hospital │
+└──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
+```
+
+**Hospital Profile Fields:**
+
+| Field | Description |
+|-------|-------------|
+| `name` | Hospital / Clinic name |
+| `type` | `HOSPITAL` / `CLINIC` / `NURSING_HOME` / `MEDICAL_COLLEGE` |
+| `location` | JSONB — address, city, state, pincode, coordinates |
+| `bed_count` | Number of beds |
+| `verification_status` | `UNVERIFIED` → `PENDING` → `VERIFIED` |
+| `logo_file_id` | Logo stored on AWS S3 |
+
+**Hospital Structure:**
+```
+Hospital
+  └── Branches (multiple locations)
+        └── Departments (Cardiology, ICU, OPD...)
+              └── Staff (ADMIN / HR / RECRUITER roles)
+```
+
+### 3.2 Job Posting
+
+**Job Post Fields:**
+
+| Field | Options |
+|-------|---------|
+| `job_type` | `FULL_TIME` / `PART_TIME` / `VISITING` / `LOCUM` / `CONTRACT` |
+| `shift_type` | `DAY` / `NIGHT` / `ROTATIONAL` / `FLEXIBLE` |
+| `salary_visibility` | `PUBLIC` / `ON_REQUEST` / `HIDDEN` |
+| `status` | `DRAFT` → `PUBLISHED` → `CLOSED` / `EXPIRED` / `FILLED` |
+| `is_urgent` | Boolean — shows urgent badge |
+| `positions` | Number of openings |
+| `experience_min_years` | Minimum experience required |
+| `closing_date` | Auto-expire date |
+
+### 3.3 Job Application Pipeline (Recruitment CRM)
+
+```
+  APPLIED
+    │
+    ▼
+  PROFILE_VIEWED  ◀── Hospital HR views doctor profile
+    │
+    ▼
+  SHORTLISTED     ◀── Added to shortlist
+    │
+    ▼
+  INTERVIEW       ◀── Interview scheduled
+    │
+    ├──▶ OFFERED  ◀── Offer letter sent
+    │       │
+    │       └──▶ HIRED ◀── Doctor accepts offer
+    │
+    └──▶ REJECTED
+
+  (Doctor can WITHDRAW at any stage)
+```
+
+Every status change is logged in `ApplicationHistory` with:
+- `from_status` / `to_status`
+- `changed_by` (user who made the change)
+- `notes` (optional reason)
+
+### 3.4 AI Matching (Phase 2)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AI MATCHING ENGINE                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Job Requirements          Doctor Profile                   │
+│  ┌──────────────┐          ┌──────────────┐                │
+│  │ specialty_id │◄────────►│ primary_spec │  40%           │
+│  │ experience   │◄────────►│ exp_years    │  25%           │
+│  │ location     │◄────────►│ prof_location│  20%           │
+│  │ qual_ids     │◄────────►│ qualifications│ 15%           │
+│  └──────────────┘          └──────────────┘                │
+│                                                             │
+│  Output: match_score (0–100) returned in job listing API   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**API Endpoints — Career Marketplace:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/hospitals/register/` | Register new hospital |
+| GET | `/api/v1/hospitals/me/` | Get my hospital profile |
+| POST | `/api/v1/hospitals/me/branches/` | Add hospital branch |
+| GET | `/api/v1/hospitals/me/branches/` | List branches |
+| POST | `/api/v1/hospitals/me/departments/` | Add department |
+| GET | `/api/v1/hospitals/me/departments/` | List departments |
+| POST | `/api/v1/hospitals/me/invite-user/` | Invite HR / Recruiter |
+| GET | `/api/v1/hospitals/me/staff/` | List hospital staff |
+| POST | `/api/v1/hospitals/me/upload-logo/` | Upload hospital logo |
+| POST | `/api/v1/jobs/` | Create job posting |
+| GET | `/api/v1/jobs/` | List jobs (with filters) |
+| GET | `/api/v1/jobs/{id}/` | Get job details |
+| POST | `/api/v1/jobs/{id}/apply/` | One-tap apply |
+| POST | `/api/v1/jobs/{id}/withdraw/` | Withdraw application |
+| GET | `/api/v1/jobs/my-applications/` | Doctor's applications |
+| GET | `/api/v1/jobs/{id}/applications/` | Hospital — view applicants |
+| PATCH | `/api/v1/jobs/applications/{id}/status/` | Update application status |
+
+---
+
+## 4. Module 3 — Doctor Availability Exchange
+
+> Structured locum & part-time marketplace — doctors post availability, hospitals post urgent requirements, system matches & manages full shift lifecycle.
+
+### 4.1 Doctor Availability
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│               DOCTOR AVAILABILITY POSTING                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Dr. Priya Mehta — Anesthesiologist                        │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  Type:     LOCUM                                    │   │
+│  │  From:     15 Aug 2025  →  30 Aug 2025              │   │
+│  │  Location: Mumbai, Maharashtra  (50 km radius)      │   │
+│  │  Min Pay:  ₹8,000 / shift                           │   │
+│  │  Slots:    Mon 09:00–17:00  |  Wed 09:00–17:00      │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Availability Types:**
+
+| Type | Description |
+|------|-------------|
+| `LOCUM` | Short-term fill-in shifts |
+| `VISITING` | Regular visiting consultant slots |
+| `TEMPORARY` | Fixed-term contract (weeks/months) |
+| `PART_TIME` | Ongoing part-time engagement |
+
+**Availability Slots** — each availability can have multiple time slots:
+- `slot_date` — specific date
+- `start_time` / `end_time` — time window
+- `is_booked` — auto-updated when shift is confirmed
+
+### 4.2 Urgent Hospital Requirement
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              HOSPITAL SHIFT REQUIREMENT                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Apollo Hospital, Mumbai — ICU Department                  │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  Specialty:   Anesthesiology                        │   │
+│  │  Date:        18 Aug 2025                           │   │
+│  │  Time:        08:00 – 20:00  (12 hr shift)          │   │
+│  │  Doctors:     2 required                            │   │
+│  │  Pay:         ₹12,000 / shift                       │   │
+│  │  Urgency:     🔴 IMMEDIATE                          │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Urgency Levels:**
+
+| Level | Description |
+|-------|-------------|
+| `NORMAL` | Standard requirement, planned in advance |
+| `URGENT` | Required within 24–48 hours |
+| `IMMEDIATE` | Required today / emergency fill |
+
+**Requirement Status Flow:**
+```
+  OPEN ──▶ FILLED
+    │
+    ├──▶ CANCELLED
+    └──▶ EXPIRED  (auto after requirement_date passes)
+```
+
+### 4.3 Doctor Matching
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   MATCHING ALGORITHM                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Hospital posts ShiftRequirement                           │
+│           │                                                 │
+│           ▼                                                 │
+│  System filters DoctorAvailability where:                  │
+│    • availability_type matches requirement type            │
+│    • available_from ≤ requirement_date ≤ available_until   │
+│    • preferred_location within preferred_radius_km         │
+│    • minimum_compensation ≤ requirement compensation       │
+│    • slot exists for requirement date & time               │
+│           │                                                 │
+│           ▼                                                 │
+│  Matched doctors list returned to hospital                 │
+│  Hospital sends ShiftRequest to selected doctors           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 4.4 Shift Lifecycle
+
+```
+  Hospital creates ShiftRequirement (status: OPEN)
+           │
+           ▼
+  Hospital sends ShiftRequest to matched doctor
+           │                    (status: REQUESTED)
+           ▼
+  Doctor responds:
+    ├──▶ ACCEPTED_BY_DOCTOR
+    │         │
+    │         ▼
+    │    Hospital confirms:
+    │         ├──▶ CONFIRMED_BY_HOSPITAL
+    │         │         │
+    │         │         ▼
+    │         │    Shift completed:
+    │         │         └──▶ COMPLETED
+    │         │
+    │         └──▶ (Hospital ignores → doctor can cancel)
+    │
+    └──▶ DECLINED_BY_DOCTOR
+
+  Either party can CANCEL at any stage
+```
+
+**Shift Request Status Reference:**
+
+| Status | Triggered By | Description |
+|--------|-------------|-------------|
+| `REQUESTED` | Hospital | Hospital sends request to doctor |
+| `ACCEPTED_BY_DOCTOR` | Doctor | Doctor accepts the shift |
+| `DECLINED_BY_DOCTOR` | Doctor | Doctor declines |
+| `CONFIRMED_BY_HOSPITAL` | Hospital | Hospital confirms after doctor accepts |
+| `COMPLETED` | Hospital | Shift successfully completed |
+| `CANCELLED` | Either | Cancelled before completion |
+
+**API Endpoints — Availability Exchange:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/availability/` | Doctor posts availability |
+| GET | `/api/v1/availability/me/` | List my availabilities |
+| DELETE | `/api/v1/availability/{id}/` | Deactivate availability |
+| GET | `/api/v1/availability/{id}/slots/` | List slots for an availability |
+| POST | `/api/v1/shifts/requirements/` | Hospital posts shift requirement |
+| GET | `/api/v1/shifts/requirements/` | List open shift requirements |
+| GET | `/api/v1/shifts/requirements/mine/` | Hospital's own requirements |
+| POST | `/api/v1/shifts/requirements/{id}/request/` | Doctor requests a shift |
+| PATCH | `/api/v1/shifts/requests/{id}/respond/` | Doctor accepts / declines |
+| PATCH | `/api/v1/shifts/requests/{id}/confirm/` | Hospital confirms shift |
+| GET | `/api/v1/shifts/requests/mine/` | Doctor's shift requests |
+
+---
+
+## 5. System Architecture
 
 ### 2.1 High-Level Architecture
 
@@ -223,7 +629,7 @@ python run.py
 
 ---
 
-## 3. Technology Stack
+## 6. Technology Stack
 
 ### 3.1 Core Technologies
 
@@ -271,7 +677,7 @@ CREATE EXTENSION IF NOT EXISTS unaccent;     -- Unaccent text
 
 ---
 
-## 4. Database Design
+## 7. Database Design
 
 ### 4.1 Complete Database Schema
 
@@ -710,7 +1116,7 @@ CREATE TRIGGER user_search_vector_update
 
 ---
 
-## 5. API Architecture (FastAPI)
+## 8. API Architecture (FastAPI)
 
 ### 5.1 FastAPI Integration with Django
 
@@ -1706,7 +2112,7 @@ if __name__ == "__main__":
 
 ---
 
-## 6. Project Structure
+## 9. Project Structure
 
 ```
 docconnect/
@@ -1801,7 +2207,7 @@ docconnect/
 
 ---
 
-## 7. Development Setup
+## 10. Development Setup
 
 ### 7.1 Prerequisites
 
@@ -1904,7 +2310,7 @@ docker-compose logs -f
 
 ---
 
-## 8. Deployment
+## 11. Deployment
 
 ### 8.1 Environment Variables
 
@@ -1990,7 +2396,7 @@ docker-compose -f docker-compose.production.yml exec backend python manage.py co
 
 ---
 
-## 9. API Documentation
+## 12. API Documentation
 
 ### 9.1 Access Swagger UI
 
@@ -2035,7 +2441,7 @@ docker-compose -f docker-compose.production.yml exec backend python manage.py co
 
 ---
 
-## 10. Security
+## 13. Security
 
 ### 10.1 Authentication Flow
 
@@ -2122,7 +2528,7 @@ class DataEncryption:
 
 ---
 
-## 11. Testing
+## 14. Testing
 
 ### 11.1 Running Tests
 
@@ -2169,7 +2575,7 @@ def test_verify_otp_invalid():
 
 ---
 
-## 12. Troubleshooting
+## 15. Troubleshooting
 
 ### 12.1 Common Issues
 
@@ -2200,7 +2606,7 @@ docker-compose logs -f
 
 ---
 
-## 13. Roadmap
+## 16. Roadmap
 
 ### Phase 1 — MVP (Current)
 - [x] OTP-based authentication
@@ -2210,22 +2616,26 @@ docker-compose logs -f
 - [x] Basic messaging
 
 ### Phase 2 — Q3 2026
+- [ ] Doctor connections (send / accept / withdraw)
+- [ ] Feed & post system (clinical cases, articles, updates)
+- [ ] Specialty communities & group discussions
 - [ ] Hospital verification via document OCR
-- [ ] AI-powered job matching score
-- [ ] Video consultation scheduling
+- [ ] AI-powered job matching score (specialty + experience + location + qualification)
+- [ ] Push notifications via FCM
 - [ ] CME credit tracking
-- [ ] Push notifications (FCM)
 - [ ] iOS app support
 
 ### Phase 3 — Q4 2026
-- [ ] Hospital analytics dashboard
-- [ ] Referral network (case sharing)
-- [ ] Telemedicine integration
+- [ ] Peer endorsements & skill recommendations
+- [ ] Second opinion & case referral network
+- [ ] Hospital analytics dashboard (applications, hires, shift fill rate)
+- [ ] Telemedicine / video consultation scheduling
 - [ ] Multi-language support (Hindi, Tamil, Telugu)
+- [ ] AI-powered doctor matching for shift requirements
 
 ---
 
-## 14. Contributing
+## 17. Contributing
 
 ### 14.1 Development Guidelines
 

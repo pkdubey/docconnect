@@ -127,7 +127,14 @@
             <span class="job-badge badge-{% if s.urgency == 'IMMEDIATE' %}urgent{% elif s.urgency == 'URGENT' %}pending{% else %}verified{% endif %}">
               {% if s.urgency == 'IMMEDIATE' %}🔴{% elif s.urgency == 'URGENT' %}🟡{% else %}🟢{% endif %} {{ s.get_urgency_display }}
             </span>
-            <button class="btn btn-primary btn-sm" onclick="showToast('Shift request sent!')">Apply for Shift</button>
+            {% if request.user.is_authenticated and request.user.user_type == 'DOCTOR' %}
+            <form method="post" action="/availability/shift/{{ s.id }}/request/">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-primary btn-sm">Apply for Shift</button>
+            </form>
+            {% else %}
+            <button class="btn btn-outline btn-sm" onclick="showToast('Login as a doctor to apply')">Apply for Shift</button>
+            {% endif %}
           </div>
         </div>
       </div>

@@ -54,14 +54,27 @@
     <div class="card">
       <div class="section-header">
         <h2>Verified Doctors</h2>
-        <span style="font-size:13px;color:var(--muted)">{{ total }} result{{ total|pluralize }}</span>
+        <div style="display:flex;gap:12px;align-items:center">
+          {% if pending_count %}
+          <a href="/network/requests/" style="font-size:13px;color:var(--blue);font-weight:600">
+            👥 {{ pending_count }} pending request{{ pending_count|pluralize }}
+          </a>
+          {% else %}
+          <a href="/network/requests/" style="font-size:13px;color:var(--muted)">My Connections</a>
+          {% endif %}
+          <span style="font-size:13px;color:var(--muted)">{{ total }} result{{ total|pluralize }}</span>
+        </div>
       </div>
 
       {% for doc in doctors %}
       <div class="doctor-card">
+        {% if doc.photo %}
+        <div class="doctor-avatar" style="background-image:url('{{ doc.photo }}');background-size:cover;background-position:center"></div>
+        {% else %}
         <div class="doctor-avatar" style="background:{{ doc.color }}">{{ doc.initials }}</div>
+        {% endif %}
         <div class="doctor-info">
-          <div class="doctor-name">Dr. {{ doc.full_name }}</div>
+          <div class="doctor-name"><a href="/profile/{{ doc.obj.id }}/" style="color:var(--blue)">Dr. {{ doc.full_name }}</a></div>
           <div class="doctor-spec">{{ doc.headline|default:"Doctor" }}</div>
           <div class="doctor-meta">
             {{ doc.experience_years }} yrs exp
@@ -73,9 +86,24 @@
             {% else %}Unverified{% endif %}
           </span>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <button class="connect-btn" onclick="showToast('Connection request sent!')">+ Connect</button>
-          <button class="connect-btn" style="border-color:var(--muted);color:var(--muted)" onclick="window.location.href='/messaging/'">Message</button>
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:110px">
+          {% if doc.conn_status == 'ACCEPTED' %}
+            <span class="connect-btn" style="border-color:var(--green);color:var(--green);text-align:center">✓ Connected</span>
+          {% elif doc.conn_status == 'PENDING' and doc.conn_direction == 'sent' %}
+            <span class="connect-btn" style="border-color:var(--muted);color:var(--muted);text-align:center;font-size:12px">⏳ Pending</span>
+          {% elif doc.conn_status == 'PENDING' and doc.conn_direction == 'received' %}
+            <form method="post" action="/network/connections/{{ doc.conn_id }}/respond/">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="accept">
+              <button type="submit" class="connect-btn" style="width:100%;background:var(--blue);color:#fff;border-color:var(--blue)">✓ Accept</button>
+            </form>
+          {% else %}
+            <form method="post" action="/profile/{{ doc.obj.id }}/connect/">
+              {% csrf_token %}
+              <button type="submit" class="connect-btn" style="width:100%">+ Connect</button>
+            </form>
+          {% endif %}
+          <a href="/profile/{{ doc.obj.id }}/" class="connect-btn" style="border-color:var(--muted);color:var(--muted);text-align:center">View Profile</a>
         </div>
       </div>
       {% empty %}

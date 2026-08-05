@@ -22,9 +22,17 @@ class HospitalDepartmentAdmin(ModelAdmin):
 
 
 class HospitalUserAdmin(ModelAdmin):
-    list_display = ('user', 'hospital', 'role', 'status', 'created_at')
+    list_display = ('get_name', 'user', 'hospital', 'role', 'designation', 'status', 'created_at')
     list_filter = ('role', 'status')
     search_fields = ('user__phone', 'hospital__name')
+    fields = ('user', 'hospital', 'role', 'designation', 'branch', 'department', 'status')
+
+    def get_name(self, obj):
+        meta = obj.user.metadata or {}
+        first = meta.get('first_name', '')
+        last = meta.get('last_name', '')
+        return f'{first} {last}'.strip() or '—'
+    get_name.short_description = 'Name'
 
 
 docconnect_admin.register(Hospital, HospitalAdmin)

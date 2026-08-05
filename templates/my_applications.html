@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}My Applications — DocConnect{% endblock %}
+{% block nav_jobs %}active{% endblock %}
+
+{% block content %}
+<div style="max-width:900px;margin:0 auto;padding:24px 16px">
+
+  <div class="card" style="margin-bottom:8px">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <h1 style="font-size:20px;font-weight:800">My Applications</h1>
+      <a href="/jobs/" class="btn btn-primary btn-sm">Browse Jobs</a>
+    </div>
+
+    <!-- Status filter tabs -->
+    <div class="tabs">
+      <div class="tab {% if not status_filter %}active{% endif %}"><a href="/my-applications/" style="color:inherit;text-decoration:none">All ({{ total }})</a></div>
+      <div class="tab {% if status_filter == 'APPLIED' %}active{% endif %}"><a href="/my-applications/?status=APPLIED" style="color:inherit;text-decoration:none">Applied</a></div>
+      <div class="tab {% if status_filter == 'SHORTLISTED' %}active{% endif %}"><a href="/my-applications/?status=SHORTLISTED" style="color:inherit;text-decoration:none">Shortlisted</a></div>
+      <div class="tab {% if status_filter == 'INTERVIEW' %}active{% endif %}"><a href="/my-applications/?status=INTERVIEW" style="color:inherit;text-decoration:none">Interview</a></div>
+      <div class="tab {% if status_filter == 'OFFERED' %}active{% endif %}"><a href="/my-applications/?status=OFFERED" style="color:inherit;text-decoration:none">Offered</a></div>
+      <div class="tab {% if status_filter == 'HIRED' %}active{% endif %}"><a href="/my-applications/?status=HIRED" style="color:inherit;text-decoration:none">Hired</a></div>
+    </div>
+  </div>
+
+  <div class="card">
+    {% for app in applications %}
+    <div style="padding:16px;border-bottom:1px solid var(--border);display:flex;gap:12px">
+      <div style="width:52px;height:52px;border-radius:4px;background:#eef3f8;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🏥</div>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-weight:700;font-size:15px;color:var(--blue)">
+              <a href="/jobs/{{ app.job.id }}/" style="color:var(--blue)">{{ app.job.title }}</a>
+            </div>
+            <div style="font-size:13px;color:var(--text)">{{ app.job.hospital.name }}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">
+              📍 {{ app.job.location.city|default:"" }}{% if app.job.location.state %}, {{ app.job.location.state }}{% endif %}
+              &nbsp;·&nbsp; {{ app.job.get_job_type_display }}
+            </div>
+          </div>
+          <div style="text-align:right">
+            <span class="job-badge
+              {% if app.status == 'HIRED' %}badge-verified
+              {% elif app.status == 'OFFERED' %}badge-locum
+              {% elif app.status == 'INTERVIEW' or app.status == 'SHORTLISTED' %}badge-pending
+              {% elif app.status == 'REJECTED' or app.status == 'WITHDRAWN' %}badge-urgent
+              {% else %}badge-unverified{% endif %}">
+              {% if app.status == 'APPLIED' %}📤 Applied
+              {% elif app.status == 'PROFILE_VIEWED' %}👁 Profile Viewed
+              {% elif app.status == 'SHORTLISTED' %}⭐ Shortlisted
+              {% elif app.status == 'INTERVIEW' %}📅 Interview
+              {% elif app.status == 'OFFERED' %}🎉 Offered
+              {% elif app.status == 'HIRED' %}✅ Hired
+              {% elif app.status == 'REJECTED' %}❌ Rejected
+              {% elif app.status == 'WITHDRAWN' %}↩ Withdrawn
+              {% else %}{{ app.status }}{% endif %}
+            </span>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">Applied {{ app.applied_at|timesince }} ago</div>
+          </div>
+        </div>
+
+        <!-- Application history timeline -->
+        {% with history=app.history.all %}
+        {% if history %}
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+          <div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:6px">Timeline</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <span style="font-size:11px;background:#eef3f8;padding:2px 8px;border-radius:12px;color:var(--blue)">Applied</span>
+            {% for h in history %}
+            <span style="font-size:11px;color:var(--muted)">&#8594;</span>
+            <span style="font-size:11px;padding:2px 8px;border-radius:12px;
+              {% if h.to_status == 'HIRED' %}background:#e6f4ea;color:#057642
+              {% elif h.to_status == 'REJECTED' or h.to_status == 'WITHDRAWN' %}background:#fce8e6;color:#cc1016
+              {% elif h.to_status == 'OFFERED' %}background:#e6f4ea;color:#057642
+              {% elif h.to_status == 'INTERVIEW' or h.to_status == 'SHORTLISTED' %}background:#fff3e0;color:#e16b00
+              {% else %}background:#f3f2ef;color:var(--muted){% endif %}">
+              {{ h.to_status|title }} &middot; {{ h.created_at|date:"d M" }}
+            </span>
+            {% endfor %}
+          </div>
+          {% with last=history|last %}
+          {% if last.notes %}
+          <div style="margin-top:6px;font-size:12px;color:var(--muted);font-style:italic">Note: {{ last.notes }}</div>
+          {% endif %}
+          {% endwith %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <a href="/jobs/{{ app.job.id }}/" class="btn btn-outline btn-sm">View Job</a>
+          {% if app.status != 'HIRED' and app.status != 'REJECTED' and app.status != 'WITHDRAWN' %}
+          <form method="post" action="/my-applications/{{ app.id }}/withdraw/" style="display:inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm" style="border:1.5px solid var(--red);color:var(--red);background:none;border-radius:16px;padding:4px 12px;font-size:13px;font-weight:600;cursor:pointer"
+                    onclick="return confirm('Withdraw this application?')">Withdraw</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="empty-state">
+      <div class="icon">📋</div>
+      <p>No applications{% if status_filter %} with status "{{ status_filter }}"{% endif %} yet.</p>
+      <a href="/jobs/" class="btn btn-primary" style="margin-top:16px">Browse Jobs</a>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

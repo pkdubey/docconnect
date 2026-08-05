@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}My Availability — DocConnect{% endblock %}
+{% block nav_avail %}active{% endblock %}
+
+{% block content %}
+<div style="max-width:800px;margin:0 auto;padding:24px 16px">
+  <div class="card" style="margin-bottom:8px">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div>
+        <h1 style="font-size:20px;font-weight:800">My Availability</h1>
+        <div style="font-size:13px;color:var(--muted);margin-top:2px">{{ availabilities|length }} posting{{ availabilities|length|pluralize }}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <a href="/availability/" class="btn btn-outline btn-sm">Browse Exchange</a>
+        <button class="btn btn-primary btn-sm" onclick="openModal('availModal')">+ Post New</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    {% for a in availabilities %}
+    <div class="avail-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-weight:700;font-size:15px">{{ a.get_availability_type_display }}</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:2px">
+            📅 {{ a.available_from }} → {{ a.available_until }}
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">
+            {% if a.preferred_location.city %}📍 {{ a.preferred_location.city }}{% if a.preferred_location.state %}, {{ a.preferred_location.state }}{% endif %}{% endif %}
+            {% if a.minimum_compensation %} &nbsp;·&nbsp; 💰 Min ₹{{ a.minimum_compensation }}/shift{% endif %}
+            {% if a.preferred_radius_km %} &nbsp;·&nbsp; 📏 {{ a.preferred_radius_km }}km radius{% endif %}
+          </div>
+          {% if a.notes %}
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;font-style:italic">{{ a.notes|truncatewords:20 }}</div>
+          {% endif %}
+          {% with slots=a.slots.all %}
+          {% if slots %}
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+            {% for slot in slots %}
+            <span class="slot-chip">{{ slot.slot_date|date:"D d M" }} {{ slot.start_time|time:"g:i A" }}–{{ slot.end_time|time:"g:i A" }}{% if slot.is_booked %} ✓{% endif %}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% endwith %}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          <span class="job-badge {% if a.is_active %}badge-verified{% else %}badge-unverified{% endif %}">
+            {% if a.is_active %}🟢 Active{% else %}⚫ Inactive{% endif %}
+          </span>
+          {% if a.is_active %}
+          <form method="post" action="/availability/mine/">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="deactivate">
+            <input type="hidden" name="avail_id" value="{{ a.id }}">
+            <button type="submit" class="btn btn-sm" style="border:1.5px solid var(--red);color:var(--red);background:none;border-radius:16px;padding:4px 12px;font-size:13px;font-weight:600;cursor:pointer"
+                    onclick="return confirm('Deactivate this availability?')">Deactivate</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="empty-state">
+      <div class="icon">📅</div>
+      <p>You haven't posted any availability yet.</p>
+      <button class="btn btn-primary" style="margin-top:12px" onclick="openModal('availModal')">+ Post Availability</button>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Post Availability Modal -->
+<div class="modal-overlay" id="availModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Post Your Availability</h3>
+      <button class="modal-close" onclick="closeModal('availModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Availability Type *</label>
+        <select class="form-select" id="availType">
+          <option value="LOCUM">Locum</option>
+          <option value="VISITING">Visiting</option>
+          <option value="TEMPORARY">Temporary</option>
+          <option value="PART_TIME">Part Time</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Available From *</label>
+          <input class="form-input" type="date" id="availFrom"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Available Until *</label>
+          <input class="form-input" type="date" id="availUntil"/>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">City</label>
+          <input class="form-input" id="availCity" placeholder="Preferred city"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Radius (km)</label>
+          <input class="form-input" type="number" id="availRadius" placeholder="50"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Minimum Compensation (₹/shift)</label>
+        <input class="form-input" type="number" id="availComp" placeholder="3000"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-textarea" id="availNotes" placeholder="Any specific requirements..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('availModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAvailability()">Post</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function submitAvailability() {
+  const data = new FormData();
+  data.append('availability_type', document.getElementById('availType').value);
+  data.append('available_from', document.getElementById('availFrom').value);
+  data.append('available_until', document.getElementById('availUntil').value);
+  data.append('city', document.getElementById('availCity').value);
+  data.append('radius_km', document.getElementById('availRadius').value);
+  data.append('min_compensation', document.getElementById('availComp').value);
+  data.append('notes', document.getElementById('availNotes').value);
+  data.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+  fetch('/availability/post/', {method:'POST', body:data})
+    .then(r => r.json())
+    .then(d => {
+      closeModal('availModal');
+      if (d.success) { showToast('Availability posted!'); setTimeout(()=>location.reload(), 800); }
+      else showToast('Error: ' + (d.error || 'Unknown'));
+    }).catch(() => { closeModal('availModal'); showToast('Posted!'); setTimeout(()=>location.reload(), 800); });
+}
+</script>
+{% endblock %}

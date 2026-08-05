@@ -20,6 +20,7 @@ class Hospital(models.Model):
     name = models.CharField(max_length=255)
     type = models.CharField(max_length=50, choices=TYPE_CHOICES)
     logo_file_id = models.UUIDField(null=True, blank=True)
+    logo_base64 = models.TextField(null=True, blank=True)
     about = models.TextField(null=True, blank=True)
     location = models.JSONField()
     bed_count = models.IntegerField(null=True, blank=True)
@@ -69,6 +70,20 @@ class HospitalDepartment(models.Model):
 
     def __str__(self):
         return f"{self.hospital.name} / {self.name}"
+
+
+class HospitalFollow(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='hospital_follows')
+    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE, related_name='followers')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'hospital_follows'
+        unique_together = ('user', 'hospital')
+
+    def __str__(self):
+        return f"{self.user.phone} follows {self.hospital.name}"
 
 
 class HospitalUser(models.Model):

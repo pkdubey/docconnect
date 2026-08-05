@@ -8,6 +8,7 @@ class JobPostAdmin(ModelAdmin):
     list_filter = ('job_type', 'status', 'is_urgent', 'shift_type')
     search_fields = ('title', 'hospital__name')
     ordering = ('-created_at',)
+    exclude = ('metadata', 'search_vector')
 
 
 class JobApplicationAdmin(ModelAdmin):

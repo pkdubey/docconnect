@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}My Shift Requests — DocConnect{% endblock %}
+{% block nav_avail %}active{% endblock %}
+
+{% block content %}
+<div style="max-width:900px;margin:0 auto;padding:24px 16px">
+
+  <div class="card" style="margin-bottom:8px">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <h1 style="font-size:20px;font-weight:800">My Shift Requests</h1>
+      <a href="/availability/" class="btn btn-primary btn-sm">Browse Shifts</a>
+    </div>
+    <div class="tabs">
+      <div class="tab {% if not status_filter %}active{% endif %}"><a href="/shifts/mine/" style="color:inherit;text-decoration:none">All</a></div>
+      <div class="tab {% if status_filter == 'REQUESTED' %}active{% endif %}"><a href="/shifts/mine/?status=REQUESTED" style="color:inherit;text-decoration:none">Requested</a></div>
+      <div class="tab {% if status_filter == 'ACCEPTED_BY_DOCTOR' %}active{% endif %}"><a href="/shifts/mine/?status=ACCEPTED_BY_DOCTOR" style="color:inherit;text-decoration:none">Accepted</a></div>
+      <div class="tab {% if status_filter == 'CONFIRMED_BY_HOSPITAL' %}active{% endif %}"><a href="/shifts/mine/?status=CONFIRMED_BY_HOSPITAL" style="color:inherit;text-decoration:none">Confirmed</a></div>
+      <div class="tab {% if status_filter == 'COMPLETED' %}active{% endif %}"><a href="/shifts/mine/?status=COMPLETED" style="color:inherit;text-decoration:none">Completed</a></div>
+    </div>
+  </div>
+
+  <div class="card">
+    {% for sr in shift_requests %}
+    <div style="padding:16px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-weight:700;font-size:15px">{{ sr.requirement.hospital.name }}</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:2px">
+            📅 {{ sr.requirement.requirement_date|date:"D, d M Y" }}
+            &nbsp;·&nbsp; 🕐 {{ sr.requirement.start_time|time:"g:i A" }}–{{ sr.requirement.end_time|time:"g:i A" }}
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">
+            {% if sr.requirement.location.city %}📍 {{ sr.requirement.location.city }}{% endif %}
+            &nbsp;·&nbsp; 💰 ₹{{ sr.requirement.compensation }}
+            &nbsp;·&nbsp;
+            <span class="job-badge badge-{% if sr.requirement.urgency == 'IMMEDIATE' %}urgent{% elif sr.requirement.urgency == 'URGENT' %}pending{% else %}verified{% endif %}">
+              {{ sr.requirement.get_urgency_display }}
+            </span>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <span class="job-badge
+            {% if sr.status == 'COMPLETED' %}badge-verified
+            {% elif sr.status == 'CONFIRMED_BY_HOSPITAL' %}badge-locum
+            {% elif sr.status == 'ACCEPTED_BY_DOCTOR' %}badge-pending
+            {% elif sr.status == 'DECLINED_BY_DOCTOR' or sr.status == 'CANCELLED' %}badge-urgent
+            {% else %}badge-unverified{% endif %}">
+            {% if sr.status == 'REQUESTED' %}📤 Requested
+            {% elif sr.status == 'ACCEPTED_BY_DOCTOR' %}✅ Accepted
+            {% elif sr.status == 'DECLINED_BY_DOCTOR' %}❌ Declined
+            {% elif sr.status == 'CONFIRMED_BY_HOSPITAL' %}🏥 Confirmed
+            {% elif sr.status == 'COMPLETED' %}🎉 Completed
+            {% elif sr.status == 'CANCELLED' %}↩ Cancelled
+            {% else %}{{ sr.status }}{% endif %}
+          </span>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">{{ sr.requested_at|timesince }} ago</div>
+        </div>
+      </div>
+
+      {% if sr.status == 'REQUESTED' %}
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <form method="post" action="/shifts/mine/{{ sr.id }}/respond/" style="display:inline">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="accept">
+          <button type="submit" class="btn btn-primary btn-sm">Accept</button>
+        </form>
+        <form method="post" action="/shifts/mine/{{ sr.id }}/respond/" style="display:inline">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="decline">
+          <button type="submit" class="btn btn-sm" style="border:1.5px solid var(--red);color:var(--red);background:none;border-radius:16px;padding:4px 12px;font-size:13px;font-weight:600;cursor:pointer">Decline</button>
+        </form>
+      </div>
+      {% elif sr.status not in 'COMPLETED,CANCELLED,DECLINED_BY_DOCTOR' %}
+      <div style="margin-top:10px">
+        <form method="post" action="/shifts/mine/{{ sr.id }}/respond/" style="display:inline">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="cancel">
+          <button type="submit" class="btn btn-sm" style="border:1.5px solid var(--muted);color:var(--muted);background:none;border-radius:16px;padding:4px 12px;font-size:13px;font-weight:600;cursor:pointer"
+                  onclick="return confirm('Cancel this shift request?')">Cancel</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% empty %}
+    <div class="empty-state">
+      <div class="icon">📅</div>
+      <p>No shift requests{% if status_filter %} with status "{{ status_filter }}"{% endif %}.</p>
+      <a href="/availability/" class="btn btn-primary" style="margin-top:16px">Browse Shifts</a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

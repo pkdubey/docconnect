@@ -53,7 +53,7 @@
         {% if filter_urgent %}<input type="hidden" name="urgent" value="1"/>{% endif %}
         <input class="form-input" name="q" placeholder="Search jobs by title, hospital..." value="{{ search }}" style="flex:1"/>
         <button type="submit" class="btn btn-primary">Search</button>
-        <button type="button" class="btn btn-outline" onclick="openModal('postJobModal')">+ Post Job</button>
+        <button type="button" class="btn btn-outline" onclick="window.location.href='/jobs/post/'">+ Post Job</button>
       </form>
       <div class="tabs">
         <div class="tab {% if not filter_type %}active{% endif %}" onclick="setType('')">All Jobs</div>
@@ -76,7 +76,7 @@
       <div class="job-card">
         <div class="job-logo">🏥</div>
         <div class="job-info">
-          <div class="job-title"><a href="#">{{ job.title }}</a></div>
+          <div class="job-title"><a href="/jobs/{{ job.id }}/">{{ job.title }}</a></div>
           <div class="job-hospital">{{ job.hospital.name }}</div>
           <div class="job-meta">
             📍 {{ job.location.city|default:"" }}{% if job.location.state %}, {{ job.location.state }}{% endif %}
@@ -94,7 +94,7 @@
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-          <button class="btn btn-primary btn-sm" onclick="showToast('Applied successfully! Hospital will contact you.')">Apply</button>
+          <button class="btn btn-primary btn-sm" onclick="window.location.href='/jobs/{{ job.id }}/'" >Apply</button>
           <button class="btn btn-outline btn-sm" onclick="showToast('Job saved!')">Save</button>
           <div style="font-size:11px;color:var(--muted)">{{ job.published_at|timesince|default:"Recently" }} ago</div>
         </div>
@@ -110,56 +110,6 @@
   </main>
 </div>
 
-<!-- Post Job Modal -->
-<div class="modal-overlay" id="postJobModal">
-  <div class="modal" style="max-width:560px">
-    <div class="modal-header">
-      <h3>Post a Job</h3>
-      <button class="modal-close" onclick="closeModal('postJobModal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Job Title *</label>
-        <input class="form-input" id="jobTitle" placeholder="e.g. Cardiologist — Locum"/>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group">
-          <label class="form-label">Job Type *</label>
-          <select class="form-select" id="jobType">
-            {% for val, label in job_types %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">City *</label>
-          <input class="form-input" id="jobCity" placeholder="Mumbai"/>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group">
-          <label class="form-label">Min Salary (₹)</label>
-          <input class="form-input" type="number" id="jobSalMin" placeholder="50000"/>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Max Salary (₹)</label>
-          <input class="form-input" type="number" id="jobSalMax" placeholder="100000"/>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Description *</label>
-        <textarea class="form-textarea" id="jobDesc" placeholder="Job description, responsibilities, requirements..."></textarea>
-      </div>
-      <div class="form-group">
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="jobUrgent"/> Mark as Urgent
-        </label>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('postJobModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="closeModal('postJobModal');showToast('Job posted successfully!')">Post Job</button>
-    </div>
-  </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}

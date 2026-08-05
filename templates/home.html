@@ -11,7 +11,11 @@
       <div class="profile-card-banner"></div>
       {% if request.user.is_authenticated and request.user.user_type == 'DOCTOR' %}
         {% with dp=request.user.doctor_profile %}
+        {% if dp.photo_base64 %}
+        <div class="profile-card-avatar" style="background-image:url('{{ dp.photo_base64 }}');background-size:cover;background-position:center"></div>
+        {% else %}
         <div class="profile-card-avatar" style="background:var(--blue);color:#fff;font-size:22px;font-weight:700">{{ dp.first_name|first|upper }}{{ dp.last_name|first|upper }}</div>
+        {% endif %}
         {% endwith %}
       {% elif request.user.is_authenticated %}
         <div class="profile-card-avatar" style="background:var(--blue);color:#fff;font-size:16px;font-weight:700">{{ request.user.get_user_type_display|slice:":2"|upper }}</div>
@@ -23,6 +27,8 @@
           {% if request.user.is_authenticated %}
             {% if request.user.user_type == 'DOCTOR' %}
               {% with dp=request.user.doctor_profile %}Dr. {{ dp.first_name }} {{ dp.last_name }}{% endwith %}
+            {% elif request.user.metadata.first_name %}
+              {{ request.user.metadata.first_name }} {{ request.user.metadata.last_name }}
             {% else %}
               {{ request.user.get_user_type_display }}
             {% endif %}
@@ -68,6 +74,7 @@
         <div style="font-size:13px;font-weight:700;margin-bottom:8px">Quick Links</div>
         <div style="display:flex;flex-direction:column;gap:6px">
           <a href="/jobs/" style="font-size:13px;color:var(--blue)">&#128188; Browse Jobs</a>
+          <a href="/my-applications/" style="font-size:13px;color:var(--blue)">&#128203; My Applications</a>
           <a href="/availability/" style="font-size:13px;color:var(--blue)">&#128197; Post Availability</a>
           <a href="/network/" style="font-size:13px;color:var(--blue)">&#128101; Find Doctors</a>
           <a href="/hospitals/" style="font-size:13px;color:var(--blue)">&#127973; Hospitals</a>
@@ -83,7 +90,11 @@
       <div class="post-box">
         {% if request.user.is_authenticated and request.user.user_type == 'DOCTOR' %}
           {% with dp=request.user.doctor_profile %}
+          {% if dp.photo_base64 %}
+          <div class="post-box-avatar" style="background-image:url('{{ dp.photo_base64 }}');background-size:cover;background-position:center"></div>
+          {% else %}
           <div class="post-box-avatar" style="background:var(--blue);font-size:16px;font-weight:700">{{ dp.first_name|first|upper }}{{ dp.last_name|first|upper }}</div>
+          {% endif %}
           {% endwith %}
         {% elif request.user.is_authenticated %}
           <div class="post-box-avatar" style="background:var(--blue);font-size:13px;font-weight:700">{{ request.user.get_user_type_display|slice:":2"|upper }}</div>
@@ -179,15 +190,34 @@
       </div>
       {% for doc in suggested_doctors %}
       <div class="doctor-card">
+        {% if doc.photo %}
+        <div class="doctor-avatar" style="background-image:url('{{ doc.photo }}');background-size:cover;background-position:center"></div>
+      {% else %}
         <div class="doctor-avatar" style="background:{{ doc.color }}">{{ doc.initials }}</div>
+      {% endif %}
         <div class="doctor-info">
-          <div class="doctor-name">Dr. {{ doc.full_name }}</div>
+          <div class="doctor-name"><a href="/profile/{{ doc.id }}/" style="color:var(--blue)">Dr. {{ doc.full_name }}</a></div>
           <div class="doctor-spec">{{ doc.headline|default:"Doctor" }}</div>
           <div class="doctor-meta">
             {% if doc.professional_location.city %}{{ doc.professional_location.city }}{% endif %}
           </div>
         </div>
-        <button class="connect-btn" onclick="showToast('Connection request sent!')">+ Connect</button>
+        {% if doc.conn_status == 'ACCEPTED' %}
+          <span class="connect-btn" style="border-color:var(--green);color:var(--green)">✓ Connected</span>
+        {% elif doc.conn_status == 'PENDING' and doc.conn_direction == 'sent' %}
+          <span class="connect-btn" style="border-color:var(--muted);color:var(--muted);font-size:12px">⏳ Pending</span>
+        {% elif doc.conn_status == 'PENDING' and doc.conn_direction == 'received' %}
+          <form method="post" action="/network/connections/{{ doc.conn_id }}/respond/">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="accept">
+            <button type="submit" class="connect-btn" style="background:var(--blue);color:#fff;border-color:var(--blue)">✓ Accept</button>
+          </form>
+        {% else %}
+          <form method="post" action="/profile/{{ doc.id }}/connect/">
+            {% csrf_token %}
+            <button type="submit" class="connect-btn">+ Connect</button>
+          </form>
+        {% endif %}
       </div>
       {% endfor %}
     </div>

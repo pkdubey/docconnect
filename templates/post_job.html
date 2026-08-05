@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Post a Job — DocConnect{% endblock %}
+{% block nav_jobs %}active{% endblock %}
+
+{% block content %}
+<div style="max-width:700px;margin:32px auto;padding:0 16px">
+  {% if messages %}
+    {% for msg in messages %}
+    <div style="padding:12px 16px;border-radius:6px;margin-bottom:16px;{% if 'success' in msg.tags %}background:#e6f4ea;color:#057642;border-left:4px solid #057642{% else %}background:#fce8e6;color:#cc1016;border-left:4px solid #cc1016{% endif %}">{{ msg }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:18px;font-weight:700">💼 Post a Job</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:2px">{{ hospital.name }}</div>
+      </div>
+      <a href="/jobs/" class="btn btn-outline btn-sm">← Back to Jobs</a>
+    </div>
+    <form method="post" style="padding:20px">
+      {% csrf_token %}
+
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Job Title *</label>
+        <input class="form-input" name="title" placeholder="e.g. Senior Cardiologist — Locum" required maxlength="160"/>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="form-group">
+          <label class="form-label">Job Type *</label>
+          <select class="form-select" name="job_type">
+            {% for val, label in job_types %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Shift Type</label>
+          <select class="form-select" name="shift_type">
+            {% for val, label in shift_types %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Specialization</label>
+        <select class="form-select" name="specialty_id">
+          <option value="">— Select Specialization —</option>
+          {% for spec in specializations %}
+          <option value="{{ spec.id }}">{{ spec.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--muted)">LOCATION</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="form-group">
+          <label class="form-label">City *</label>
+          <input class="form-input" name="city" placeholder="Mumbai" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">State</label>
+          <input class="form-input" name="state" placeholder="Maharashtra"/>
+        </div>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--muted)">COMPENSATION</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="form-group">
+          <label class="form-label">Min Salary (₹)</label>
+          <input class="form-input" type="number" name="salary_min" placeholder="50000" min="0"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Salary (₹)</label>
+          <input class="form-input" type="number" name="salary_max" placeholder="100000" min="0"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Salary Visibility</label>
+          <select class="form-select" name="salary_visibility">
+            <option value="PUBLIC">Public</option>
+            <option value="ON_REQUEST">On Request</option>
+            <option value="HIDDEN">Hidden</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="form-group">
+          <label class="form-label">Min Experience (years)</label>
+          <input class="form-input" type="number" name="experience_min_years" value="0" min="0" max="60" step="0.5"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Positions Available</label>
+          <input class="form-input" type="number" name="positions" value="1" min="1"/>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Job Description *</label>
+        <textarea class="form-textarea" name="description" rows="5" placeholder="Describe the role, responsibilities, and what you're looking for..." required></textarea>
+      </div>
+
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Responsibilities</label>
+        <textarea class="form-textarea" name="responsibilities" rows="3" placeholder="Key responsibilities..."></textarea>
+      </div>
+
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Requirements</label>
+        <textarea class="form-textarea" name="requirements" rows="3" placeholder="Required qualifications, skills..."></textarea>
+      </div>
+
+      <div class="form-group" style="margin-bottom:24px">
+        <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer">
+          <input type="checkbox" name="is_urgent" style="width:16px;height:16px;accent-color:var(--red)"/>
+          🔴 Mark as Urgent
+        </label>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button type="submit" name="save_as" value="PUBLISHED" class="btn btn-primary">🚀 Publish Job</button>
+        <button type="submit" name="save_as" value="DRAFT" class="btn btn-outline">💾 Save as Draft</button>
+        <a href="/jobs/" class="btn btn-outline" style="margin-left:auto">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

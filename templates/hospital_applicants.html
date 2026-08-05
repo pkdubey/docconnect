@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Applicants — {{ job.title }}{% endblock %}
+
+{% block content %}
+<div style="max-width:960px;margin:0 auto;padding:24px 16px">
+
+  <div class="card" style="margin-bottom:8px">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">
+          <a href="/hospitals/me/jobs/" style="color:var(--blue)">My Jobs</a> › Applicants
+        </div>
+        <h1 style="font-size:20px;font-weight:800">{{ job.title }}</h1>
+        <div style="font-size:13px;color:var(--muted);margin-top:2px">
+          {{ hospital.name }} &nbsp;·&nbsp; {{ job.get_job_type_display }}
+          &nbsp;·&nbsp; {{ total }} applicant{{ total|pluralize }}
+          &nbsp;·&nbsp; <span class="job-badge badge-{% if job.status == 'PUBLISHED' %}verified{% elif job.status == 'FILLED' %}locum{% else %}pending{% endif %}">{{ job.status }}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <a href="/jobs/{{ job.id }}/" class="btn btn-outline btn-sm">View Job</a>
+        <a href="/jobs/post/" class="btn btn-primary btn-sm">+ Post New Job</a>
+      </div>
+    </div>
+    <div class="tabs" style="overflow-x:auto;white-space:nowrap">
+      <div class="tab {% if not status_filter %}active{% endif %}">
+        <a href="/jobs/{{ job.id }}/applicants/" style="color:inherit;text-decoration:none">All ({{ total }})</a>
+      </div>
+      {% for s in status_choices %}
+      <div class="tab {% if status_filter == s %}active{% endif %}">
+        <a href="/jobs/{{ job.id }}/applicants/?status={{ s }}" style="color:inherit;text-decoration:none">{{ s|title }}</a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    {% for item in applicants %}
+    {% with app=item.app doc=item.doctor %}
+    <div style="padding:16px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        {% if item.photo %}
+        <div style="width:52px;height:52px;border-radius:50%;background-image:url('{{ item.photo }}');background-size:cover;background-position:center;flex-shrink:0"></div>
+        {% else %}
+        <div style="width:52px;height:52px;border-radius:50%;background:{{ item.color }};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;flex-shrink:0">{{ item.initials }}</div>
+        {% endif %}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+            <div>
+              <div style="font-weight:700;font-size:15px">
+                <a href="/profile/{{ doc.id }}/" style="color:var(--blue)">Dr. {{ doc.full_name }}</a>
+              </div>
+              <div style="font-size:13px;color:var(--muted)">{{ doc.headline|default:"Doctor" }}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">
+                {% if doc.experience_years %}{{ doc.experience_years }} yrs &nbsp;·&nbsp;{% endif %}
+                {% if doc.professional_location.city %}📍 {{ doc.professional_location.city }} &nbsp;·&nbsp;{% endif %}
+                Applied {{ app.applied_at|timesince }} ago
+              </div>
+              {% if doc.verification_status == 'VERIFIED' %}
+              <span class="job-badge badge-verified" style="margin-top:4px;display:inline-block">✓ NMC Verified</span>
+              {% endif %}
+            </div>
+            <span class="job-badge
+              {% if app.status == 'HIRED' %}badge-verified
+              {% elif app.status == 'OFFERED' %}badge-locum
+              {% elif app.status == 'INTERVIEW' or app.status == 'SHORTLISTED' %}badge-pending
+              {% elif app.status == 'REJECTED' or app.status == 'WITHDRAWN' %}badge-urgent
+              {% else %}badge-unverified{% endif %}" style="font-size:12px;padding:4px 10px;white-space:nowrap">
+              {% if app.status == 'APPLIED' %}📤 Applied
+              {% elif app.status == 'PROFILE_VIEWED' %}👁 Profile Viewed
+              {% elif app.status == 'SHORTLISTED' %}⭐ Shortlisted
+              {% elif app.status == 'INTERVIEW' %}📅 Interview
+              {% elif app.status == 'OFFERED' %}🎉 Offered
+              {% elif app.status == 'HIRED' %}✅ Hired
+              {% elif app.status == 'REJECTED' %}❌ Rejected
+              {% elif app.status == 'WITHDRAWN' %}↩ Withdrawn
+              {% endif %}
+            </span>
+          </div>
+
+          {% with history=app.history.all %}
+          {% if history %}
+          <div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+            <span style="font-size:11px;background:#eef3f8;padding:2px 8px;border-radius:12px;color:var(--blue)">Applied</span>
+            {% for h in history %}
+            <span style="font-size:11px;color:var(--muted)">›</span>
+            <span style="font-size:11px;padding:2px 8px;border-radius:12px;
+              {% if h.to_status == 'HIRED' %}background:#e6f4ea;color:#057642
+              {% elif h.to_status == 'REJECTED' %}background:#fce8e6;color:#cc1016
+              {% elif h.to_status == 'OFFERED' %}background:#e6f4ea;color:#057642
+              {% elif h.to_status == 'INTERVIEW' or h.to_status == 'SHORTLISTED' %}background:#fff3e0;color:#e16b00
+              {% else %}background:#f3f2ef;color:var(--muted){% endif %}">
+              {{ h.to_status|title }} · {{ h.created_at|date:"d M" }}{% if h.notes %} — {{ h.notes|truncatewords:6 }}{% endif %}
+            </span>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% endwith %}
+
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+            <a href="/profile/{{ doc.id }}/" class="btn btn-outline btn-sm">👤 Profile</a>
+            <a href="/profile/{{ doc.id }}/message/" class="btn btn-outline btn-sm">💬 Message</a>
+            {% if app.status not in 'HIRED,REJECTED,WITHDRAWN' %}
+            <button class="btn btn-primary btn-sm" onclick="openStatusModal('{{ app.id }}','{{ app.status }}')">✏️ Update Status</button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endwith %}
+    {% empty %}
+    <div class="empty-state">
+      <div class="icon">📋</div>
+      <p>No applicants{% if status_filter %} with status "{{ status_filter }}"{% endif %} yet.</p>
+      {% if status_filter %}<a href="/jobs/{{ job.id }}/applicants/" class="btn btn-outline" style="margin-top:12px">View All</a>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Status Update Modal -->
+<div class="modal-overlay" id="statusModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <h3>Update Application Status</h3>
+      <button class="modal-close" onclick="closeModal('statusModal')">✕</button>
+    </div>
+    <form method="post" action="/jobs/{{ job.id }}/applicants/">
+      {% csrf_token %}
+      <input type="hidden" name="application_id" id="modalAppId">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">New Status</label>
+          <select class="form-select" name="status" id="modalStatus">
+            <option value="PROFILE_VIEWED">👁 Profile Viewed</option>
+            <option value="SHORTLISTED">⭐ Shortlisted</option>
+            <option value="INTERVIEW">📅 Interview</option>
+            <option value="OFFERED">🎉 Offered</option>
+            <option value="HIRED">✅ Hired</option>
+            <option value="REJECTED">❌ Rejected</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes (optional)</label>
+          <textarea class="form-textarea" name="notes" placeholder="e.g. Interview scheduled for Monday 10am..." style="min-height:60px"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('statusModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Update</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openStatusModal(appId, currentStatus) {
+  document.getElementById('modalAppId').value = appId;
+  const sel = document.getElementById('modalStatus');
+  const next = {'APPLIED':'PROFILE_VIEWED','PROFILE_VIEWED':'SHORTLISTED','SHORTLISTED':'INTERVIEW','INTERVIEW':'OFFERED'}[currentStatus] || currentStatus;
+  sel.value = next;
+  openModal('statusModal');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}{{ hospital.name }} — DocConnect{% endblock %}
+
+{% block content %}
+<div class="layout layout-2col" style="max-width:900px;grid-template-columns:1fr 280px">
+
+  <main>
+    <!-- Hospital Header -->
+    <div class="card" style="margin-bottom:8px">
+      <div style="height:100px;background:linear-gradient(135deg,#057642,#045d32);border-radius:8px 8px 0 0"></div>
+      <div style="padding:0 24px 20px;position:relative">
+        <div style="position:relative;display:inline-block">
+          <div id="logoEl" style="width:80px;height:80px;border-radius:8px;border:3px solid #fff;
+               {% if hospital.logo_base64 %}background:url('{{ hospital.logo_base64 }}') center/cover no-repeat{% else %}background:#eef3f8{% endif %};
+               display:flex;align-items:center;justify-content:center;font-size:32px;margin-top:-40px;margin-bottom:12px">
+            {% if not hospital.logo_base64 %}🏥{% endif %}
+          </div>
+          {% if is_hospital_admin %}
+          <label for="logoInput" style="position:absolute;bottom:14px;right:-6px;background:rgba(0,0,0,.5);color:#fff;
+                 border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+                 cursor:pointer;font-size:11px" title="Upload logo">📷</label>
+          <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="uploadLogo(this)">
+          {% endif %}
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+          <div>
+            <h1 style="font-size:22px;font-weight:800">{{ hospital.name }}</h1>
+            <div style="font-size:14px;color:var(--muted);margin-top:2px">{{ hospital.get_type_display }}</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:4px">
+              {% if hospital.location.city %}📍 {{ hospital.location.city }}{% if hospital.location.state %}, {{ hospital.location.state }}{% endif %}{% endif %}
+              {% if hospital.bed_count %} &nbsp;·&nbsp; 🛏 {{ hospital.bed_count }} beds{% endif %}
+            </div>
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+              <span class="job-badge badge-{% if hospital.verification_status == 'VERIFIED' %}verified{% elif hospital.verification_status == 'PENDING' %}pending{% else %}unverified{% endif %}">
+                {% if hospital.verification_status == 'VERIFIED' %}✓ Verified{% elif hospital.verification_status == 'PENDING' %}⏳ Pending{% else %}Unverified{% endif %}
+              </span>
+              {% if jobs %}<span style="font-size:12px;color:var(--muted)">{{ jobs|length }} open job{{ jobs|length|pluralize }}</span>{% endif %}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <form method="post" action="/hospitals/{{ hospital.id }}/follow/">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm {% if is_following %}btn-outline{% else %}btn-primary{% endif %}">
+                {% if is_following %}✓ Following{% else %}+ Follow{% endif %}
+              </button>
+            </form>
+            {% if hospital.website %}<a href="{{ hospital.website }}" target="_blank" class="btn btn-outline btn-sm">🌐 Website</a>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- About -->
+    {% if hospital.about %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">About</div>
+        <div style="font-size:14px;line-height:1.6;white-space:pre-line">{{ hospital.about }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Open Jobs -->
+    <div class="card" style="margin-bottom:8px">
+      <div class="section-header">
+        <h2>💼 Open Positions ({{ jobs|length }})</h2>
+        <a href="/jobs/?hospital={{ hospital.id }}" class="see-all">See all</a>
+      </div>
+      {% for job in jobs %}
+      <div class="job-card">
+        <div class="job-logo">🏥</div>
+        <div class="job-info">
+          <div class="job-title"><a href="/jobs/{{ job.id }}/">{{ job.title }}</a></div>
+          <div class="job-meta">
+            📍 {{ job.location.city|default:"" }}{% if job.location.state %}, {{ job.location.state }}{% endif %}
+            {% if job.salary_min and job.salary_visibility == 'PUBLIC' %} &nbsp;|&nbsp; 💰 ₹{{ job.salary_min }}{% endif %}
+            &nbsp;|&nbsp; {{ job.experience_min_years }}+ yrs
+          </div>
+          <div style="margin-top:4px">
+            {% if job.is_urgent %}<span class="job-badge badge-urgent">🔴 Urgent</span>{% endif %}
+            <span class="job-badge badge-{{ job.job_type|lower }}">{{ job.get_job_type_display }}</span>
+          </div>
+        </div>
+        <a href="/jobs/{{ job.id }}/" class="btn btn-primary btn-sm">Apply</a>
+      </div>
+      {% empty %}
+      <div class="empty-state"><div class="icon">💼</div><p>No open positions right now.</p></div>
+      {% endfor %}
+    </div>
+
+    <!-- Branches -->
+    {% if branches %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">🏢 Branches ({{ branches|length }})</div>
+        {% for b in branches %}
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <strong>{{ b.name }}</strong>
+          {% if b.location.city %} · {{ b.location.city }}{% if b.location.state %}, {{ b.location.state }}{% endif %}{% endif %}
+          {% if b.is_primary %}<span class="job-badge badge-verified" style="margin-left:6px">Primary</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Departments -->
+    {% if departments %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">🏥 Departments</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          {% for d in departments %}
+          <span style="background:#eef3f8;color:#0a66c2;padding:4px 12px;border-radius:16px;font-size:13px">{{ d.name }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </main>
+
+  <!-- RIGHT SIDEBAR -->
+  <aside class="sidebar-right">
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">Hospital Info</div>
+        <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:8px">
+          <div>🏥 <strong>{{ hospital.get_type_display }}</strong></div>
+          {% if hospital.location.city %}<div>📍 <strong>{{ hospital.location.city }}{% if hospital.location.state %}, {{ hospital.location.state }}{% endif %}</strong></div>{% endif %}
+          {% if hospital.bed_count %}<div>🛏 <strong>{{ hospital.bed_count }} beds</strong></div>{% endif %}
+          {% if hospital.phone %}<div>📞 <strong>{{ hospital.phone }}</strong></div>{% endif %}
+          {% if hospital.email %}<div>✉️ <strong>{{ hospital.email }}</strong></div>{% endif %}
+          {% if hospital.website %}<div>🌐 <a href="{{ hospital.website }}" style="color:var(--blue)">{{ hospital.website }}</a></div>{% endif %}
+          <div>📅 Member since <strong>{{ hospital.created_at|date:"M Y" }}</strong></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <form method="post" action="/hospitals/{{ hospital.id }}/follow/">
+          {% csrf_token %}
+          <button type="submit" class="btn {% if is_following %}btn-outline{% else %}btn-primary{% endif %}" style="width:100%;margin-bottom:8px">
+            {% if is_following %}✓ Following ({{ follower_count }}){% else %}+ Follow Hospital{% endif %}
+          </button>
+        </form>
+        <a href="/jobs/?city={{ hospital.location.city|default:'' }}" class="btn btn-outline" style="width:100%;text-align:center;display:block">Browse Jobs in {{ hospital.location.city|default:"this city" }}</a>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if is_hospital_admin %}
+<script>
+function uploadLogo(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showToast('Max 5MB allowed.'); return; }
+  showToast('Uploading...');
+  const fd = new FormData();
+  fd.append('logo', file);
+  fetch('/hospitals/{{ hospital.id }}/logo/', {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token }}'},
+    body: fd
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.url) {
+      const el = document.getElementById('logoEl');
+      el.style.background = "url('" + d.url + "') center/cover no-repeat";
+      el.textContent = '';
+      showToast('Logo updated!');
+    } else { showToast(d.error || 'Upload failed.'); }
+  })
+  .catch(() => showToast('Upload failed.'));
+}
+</script>
+{% endif %}
+{% endblock %}

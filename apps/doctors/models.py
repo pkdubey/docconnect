@@ -29,6 +29,8 @@ class DoctorProfile(models.Model):
     first_name = models.CharField(max_length=80)
     last_name = models.CharField(max_length=80)
     photo_file_id = models.UUIDField(null=True, blank=True)
+    photo_base64 = models.TextField(null=True, blank=True)
+    cover_base64 = models.TextField(null=True, blank=True)
     headline = models.CharField(max_length=160, null=True, blank=True)
     about = models.TextField(null=True, blank=True)
     primary_specialization_id = models.UUIDField(null=True, blank=True)
@@ -47,7 +49,7 @@ class DoctorProfile(models.Model):
         max_length=20, choices=CAREER_VISIBILITY, default='VERIFIED_HOSPITALS'
     )
     search_vector = SearchVectorField(null=True, blank=True)
-    metadata = models.JSONField(default=dict)
+    metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -113,6 +115,33 @@ class DoctorQualification(models.Model):
 
     def __str__(self):
         return f"{self.degree} — {self.institution}"
+
+
+class Connection(models.Model):
+    STATUS = [
+        ('PENDING', 'Pending'),
+        ('ACCEPTED', 'Accepted'),
+        ('DECLINED', 'Declined'),
+        ('WITHDRAWN', 'Withdrawn'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sender = models.ForeignKey(
+        DoctorProfile, on_delete=models.CASCADE, related_name='sent_connections'
+    )
+    receiver = models.ForeignKey(
+        DoctorProfile, on_delete=models.CASCADE, related_name='received_connections'
+    )
+    status = models.CharField(max_length=20, choices=STATUS, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'doctor_connections'
+        unique_together = ('sender', 'receiver')
+
+    def __str__(self):
+        return f"{self.sender} → {self.receiver} ({self.status})"
 
 
 class DoctorExperience(models.Model):

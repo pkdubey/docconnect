@@ -8,6 +8,7 @@ class DoctorProfileAdmin(ModelAdmin):
     list_filter = ('verification_status', 'profile_visibility')
     search_fields = ('first_name', 'last_name', 'user__phone')
     ordering = ('-created_at',)
+    exclude = ('metadata', 'search_vector')
 
 
 class DoctorRegistrationAdmin(ModelAdmin):

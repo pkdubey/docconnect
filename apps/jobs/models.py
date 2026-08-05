@@ -58,7 +58,7 @@ class JobPost(models.Model):
     published_at = models.DateTimeField(null=True, blank=True)
     closing_date = models.DateTimeField(null=True, blank=True)
     search_vector = SearchVectorField(null=True, blank=True)
-    metadata = models.JSONField(default=dict)
+    metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

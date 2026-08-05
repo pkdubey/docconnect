@@ -181,6 +181,15 @@ async def invite_hospital_user(invite: HospitalUserInvite, current_user=Depends(
     return {"success": True, "message": f"{invite.phone} added as {invite.role.value}"}
 
 
+@router.get("/me/staff/")
+async def list_staff(current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+    hu = _get_admin_hospital(current_user)
+    staff = HospitalUser.objects.filter(hospital=hu.hospital).select_related('user')
+    return [{"user_id": str(s.user_id), "phone": s.user.phone, "role": s.role,
+             "designation": s.designation, "status": s.status} for s in staff]
+
+
 @router.post("/me/upload-logo/")
 async def upload_logo(file: UploadFile = File(...), current_user=Depends(get_current_user)):
     from apps.core.services.storage import upload_file_to_s3
@@ -191,12 +200,3 @@ async def upload_logo(file: UploadFile = File(...), current_user=Depends(get_cur
     hu.hospital.logo_file_id = file_id
     hu.hospital.save(update_fields=['logo_file_id'])
     return {"success": True, "file_id": str(file_id)}
-
-
-@router.get("/me/staff/")
-async def list_staff(current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalUser
-    hu = _get_admin_hospital(current_user)
-    staff = HospitalUser.objects.filter(hospital=hu.hospital).select_related('user')
-    return [{"user_id": str(s.user_id), "phone": s.user.phone, "role": s.role,
-             "designation": s.designation, "status": s.status} for s in staff]

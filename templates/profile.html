@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}Dr. {{ doctor.full_name }} — DocConnect{% endblock %}
+
+{% block content %}
+<div class="layout layout-2col" style="max-width:900px;grid-template-columns:1fr 300px">
+
+  <!-- MAIN PROFILE -->
+  <main>
+
+    <!-- Banner + Avatar -->
+    <div class="card" style="margin-bottom:8px;overflow:visible">
+
+      <!-- Cover Photo -->
+      <div id="coverWrap" style="height:120px;border-radius:8px 8px 0 0;overflow:hidden;position:relative;
+           background:{% if doctor.cover_base64 %}url('{{ doctor.cover_base64 }}') center/cover no-repeat{% else %}linear-gradient(135deg,#0a66c2,#004182){% endif %}">
+        {% if is_own_profile %}
+        <label for="coverInput" style="position:absolute;bottom:8px;right:10px;background:rgba(0,0,0,.45);color:#fff;
+               border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+               cursor:pointer;font-size:16px;transition:background .2s" title="Change cover photo"
+               onmouseover="this.style.background='rgba(0,0,0,.65)'" onmouseout="this.style.background='rgba(0,0,0,.45)'">📷</label>
+        <input type="file" id="coverInput" accept="image/*" style="display:none" onchange="uploadPhoto(this,'cover')">
+        {% endif %}
+      </div>
+
+      <div style="padding:0 24px 20px;position:relative">
+
+        <!-- Avatar -->
+        <div style="position:relative;display:inline-block;margin-top:-48px;margin-bottom:12px">
+          <div id="avatarEl" style="width:96px;height:96px;border-radius:50%;border:4px solid #fff;
+               {% if doctor.photo_base64 %}background:url('{{ doctor.photo_base64 }}') center/cover no-repeat{% else %}background:{{ color }}{% endif %};
+               display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:32px">
+            {% if not doctor.photo_base64 %}{{ initials }}{% endif %}
+          </div>
+          {% if is_own_profile %}
+          <label for="photoInput" style="position:absolute;bottom:2px;right:2px;background:rgba(0,0,0,.5);color:#fff;
+                 border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+                 cursor:pointer;font-size:13px" title="Change profile photo">📷</label>
+          <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="uploadPhoto(this,'photo')">
+          {% endif %}
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+          <div>
+            <h1 style="font-size:22px;font-weight:800">Dr. {{ doctor.full_name }}</h1>
+            <div style="font-size:14px;color:var(--muted);margin-top:2px">{{ doctor.headline|default:"Doctor" }}</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:4px">
+              {% if spec_name %}<span style="color:var(--blue);font-weight:600">{{ spec_name }}</span> &nbsp;·&nbsp; {% endif %}
+              {% if doctor.professional_location.city %}📍 {{ doctor.professional_location.city }}{% if doctor.professional_location.state %}, {{ doctor.professional_location.state }}{% endif %}{% endif %}
+              {% if doctor.experience_years %} &nbsp;·&nbsp; {{ doctor.experience_years }} yrs experience{% endif %}
+            </div>
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+              {% if doctor.verification_status == 'VERIFIED' %}
+                <span class="job-badge badge-verified">✓ NMC Verified</span>
+              {% elif doctor.verification_status == 'PENDING' %}
+                <span class="job-badge badge-pending">⏳ Verification Pending</span>
+              {% else %}
+                <span class="job-badge badge-unverified">Unverified</span>
+              {% endif %}
+              {% if doctor.open_to_opportunities %}
+                <span class="job-badge" style="background:#e6f4ea;color:#057642">🟢 Open to Opportunities</span>
+              {% endif %}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            {% if is_own_profile %}
+              <a href="/profile/me/edit/" class="btn btn-outline btn-sm">✏️ Edit Profile</a>
+            {% else %}
+              {% if conn_status == 'ACCEPTED' %}
+                <span class="btn btn-outline btn-sm" style="color:var(--green);border-color:var(--green)">✓ Connected</span>
+                <form method="post" action="/profile/{{ doctor.id }}/disconnect/" style="display:inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm" style="border:1.5px solid var(--muted);color:var(--muted);background:none;border-radius:16px;padding:4px 12px;font-size:13px;font-weight:600;cursor:pointer"
+                          onclick="return confirm('Remove connection?')">Remove</button>
+                </form>
+              {% elif conn_status == 'PENDING' and conn_direction == 'sent' %}
+                <span class="btn btn-outline btn-sm" style="opacity:0.7">⏳ Request Sent</span>
+                <form method="post" action="/profile/{{ doctor.id }}/disconnect/" style="display:inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm" style="border:1.5px solid var(--muted);color:var(--muted);background:none;border-radius:16px;padding:4px 12px;font-size:13px;font-weight:600;cursor:pointer">Withdraw</button>
+                </form>
+              {% elif conn_status == 'PENDING' and conn_direction == 'received' %}
+                <form method="post" action="/network/connections/{{ conn_id }}/respond/" style="display:inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="accept">
+                  <button type="submit" class="btn btn-primary btn-sm">✓ Accept</button>
+                </form>
+                <form method="post" action="/network/connections/{{ conn_id }}/respond/" style="display:inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="decline">
+                  <button type="submit" class="btn btn-outline btn-sm">Decline</button>
+                </form>
+              {% else %}
+                <form method="post" action="/profile/{{ doctor.id }}/connect/" style="display:inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-primary btn-sm">+ Connect</button>
+                </form>
+              {% endif %}
+              <a href="/profile/{{ doctor.id }}/message/" class="btn btn-outline btn-sm">💬 Message</a>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Connection count -->
+        <div style="margin-top:12px;font-size:13px;color:var(--blue);font-weight:600">
+          {{ connection_count }} connection{{ connection_count|pluralize }}
+        </div>
+
+        {% if interest_names %}
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          {% for name in interest_names %}
+          <span style="background:#eef3f8;color:#0a66c2;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500">{{ name }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- About -->
+    {% if doctor.about %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">About</div>
+        <div style="font-size:14px;line-height:1.6;color:var(--text);white-space:pre-line">{{ doctor.about }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Experience -->
+    {% if experiences %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">🏥 Experience</div>
+        {% for exp in experiences %}
+        <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div style="width:48px;height:48px;border-radius:4px;background:#eef3f8;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🏥</div>
+          <div>
+            <div style="font-weight:700;font-size:14px">{{ exp.role }}</div>
+            <div style="font-size:13px;color:var(--text)">{{ exp.hospital_name }}</div>
+            <div style="font-size:12px;color:var(--muted)">
+              {{ exp.start_date|date:"M Y" }} — {% if exp.is_current %}Present{% else %}{{ exp.end_date|date:"M Y" }}{% endif %}
+              {% if exp.location %} · {{ exp.location }}{% endif %}
+            </div>
+            {% if exp.description %}<div style="font-size:13px;color:var(--muted);margin-top:4px">{{ exp.description|truncatewords:30 }}</div>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Qualifications -->
+    {% if qualifications %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">🎓 Education & Qualifications</div>
+        {% for q in qualifications %}
+        <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div style="width:48px;height:48px;border-radius:4px;background:#eef3f8;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🎓</div>
+          <div>
+            <div style="font-weight:700;font-size:14px">{{ q.degree }}{% if q.specialization %} — {{ q.specialization }}{% endif %}</div>
+            <div style="font-size:13px;color:var(--text)">{{ q.institution }}</div>
+            <div style="font-size:12px;color:var(--muted)">{{ q.year }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Registrations -->
+    {% if registrations %}
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">📋 Medical Registrations</div>
+        {% for r in registrations %}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-size:14px;font-weight:600">{{ r.registration_number }}</div>
+            <div style="font-size:12px;color:var(--muted)">Year: {{ r.registration_year }}</div>
+          </div>
+          <span class="job-badge badge-{% if r.verification_status == 'VERIFIED' %}verified{% elif r.verification_status == 'PENDING' %}pending{% else %}unverified{% endif %}">
+            {% if r.verification_status == 'VERIFIED' %}✓ Verified{% elif r.verification_status == 'PENDING' %}⏳ Pending{% else %}Unverified{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+  </main>
+
+  <!-- RIGHT SIDEBAR -->
+  <aside class="sidebar-right">
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-body">
+        <div class="card-title">Profile Info</div>
+        <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:8px">
+          {% if doctor.experience_years %}
+          <div>⏱ <strong>{{ doctor.experience_years }} years</strong> experience</div>
+          {% endif %}
+          {% if doctor.professional_location.city %}
+          <div>📍 <strong>{{ doctor.professional_location.city }}</strong>{% if doctor.professional_location.state %}, {{ doctor.professional_location.state }}{% endif %}</div>
+          {% endif %}
+          <div>👁 Profile: <strong>{{ doctor.get_profile_visibility_display }}</strong></div>
+          <div>📅 Member since <strong>{{ doctor.created_at|date:"M Y" }}</strong></div>
+        </div>
+      </div>
+    </div>
+
+    {% if not is_own_profile %}
+    <div class="card">
+      <div class="card-body">
+        <div class="card-title">Connect</div>
+        {% if conn_status == 'ACCEPTED' %}
+          <div style="color:var(--green);font-weight:600;font-size:13px;margin-bottom:8px">✓ You are connected</div>
+          <form method="post" action="/profile/{{ doctor.id }}/disconnect/">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" style="width:100%;color:var(--muted);border-color:var(--muted)"
+                    onclick="return confirm('Remove connection?')">Remove Connection</button>
+          </form>
+        {% elif conn_status == 'PENDING' and conn_direction == 'sent' %}
+          <div style="color:var(--muted);font-size:13px;margin-bottom:8px">⏳ Request pending...</div>
+          <form method="post" action="/profile/{{ doctor.id }}/disconnect/">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" style="width:100%">Withdraw Request</button>
+          </form>
+        {% elif conn_status == 'PENDING' and conn_direction == 'received' %}
+          <form method="post" action="/network/connections/{{ conn_id }}/respond/" style="margin-bottom:8px">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="accept">
+            <button type="submit" class="btn btn-primary" style="width:100%">✓ Accept Request</button>
+          </form>
+          <form method="post" action="/network/connections/{{ conn_id }}/respond/">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="decline">
+            <button type="submit" class="btn btn-outline" style="width:100%">Decline</button>
+          </form>
+        {% else %}
+          <form method="post" action="/profile/{{ doctor.id }}/connect/" style="margin-bottom:8px">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary" style="width:100%">+ Connect</button>
+          </form>
+        {% endif %}
+        <a href="/profile/{{ doctor.id }}/message/" class="btn btn-outline" style="width:100%;text-align:center;display:block;margin-top:8px">💬 Send Message</a>
+      </div>
+    </div>
+    {% endif %}
+  </aside>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if is_own_profile %}
+<script>
+function uploadPhoto(input, type) {
+  const file = input.files[0];
+  if (!file) return;
+  const maxMB = type === 'cover' ? 8 : 5;
+  if (file.size > maxMB * 1024 * 1024) { showToast('Max ' + maxMB + 'MB allowed.'); return; }
+  showToast('Uploading...');
+  const fd = new FormData();
+  fd.append(type === 'cover' ? 'cover' : 'photo', file);
+  fetch(type === 'cover' ? '/profile/me/cover/' : '/profile/me/photo/', {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token }}'},
+    body: fd
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.url) {
+      if (type === 'cover') {
+        document.getElementById('coverWrap').style.background = "url('" + d.url + "') center/cover no-repeat";
+      } else {
+        const av = document.getElementById('avatarEl');
+        av.style.background = "url('" + d.url + "') center/cover no-repeat";
+        av.textContent = '';
+      }
+      showToast(type === 'cover' ? 'Cover photo updated!' : 'Profile photo updated!');
+    } else { showToast(d.error || 'Upload failed.'); }
+  })
+  .catch(() => showToast('Upload failed.'));
+}
+</script>
+{% endif %}
+{% endblock %}
