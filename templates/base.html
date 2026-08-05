@@ -247,9 +247,12 @@
         {% with dp=request.user.doctor_profile %}
         {% with initials=dp.first_name|first|add:dp.last_name|first %}
         <div class="nav-profile" tabindex="0">
-          <div class="nav-profile-avatar" {% if dp.photo_base64 %}style="background-image:url('{{ dp.photo_base64 }}');background-size:cover;background-position:center;"{% endif %}>{% if not dp.photo_base64 %}{{ initials|upper }}{% endif %}</div>
-          <div class="nav-profile-label">Me <svg viewBox="0 0 10 6" fill="currentColor"><path d="M0 0l5 6 5-6z"/></svg></div>
+          <a href="/profile/me/" style="display:contents">
+            <div class="nav-profile-avatar" {% if dp.photo_base64 %}style="background-image:url('{{ dp.photo_base64 }}');background-size:cover;background-position:center;"{% endif %}>{% if not dp.photo_base64 %}{{ initials|upper }}{% endif %}</div>
+            <div class="nav-profile-label">Me <svg viewBox="0 0 10 6" fill="currentColor"><path d="M0 0l5 6 5-6z"/></svg></div>
+          </a>
           <div class="profile-dropdown">
+            <a href="/profile/me/" style="display:block;text-decoration:none;color:inherit">
             <div class="profile-dropdown-header">
               <div class="profile-dropdown-avatar" {% if dp.photo_base64 %}style="background-image:url('{{ dp.photo_base64 }}');background-size:cover;background-position:center;"{% endif %}>{% if not dp.photo_base64 %}{{ initials|upper }}{% endif %}</div>
               <div>
@@ -257,6 +260,7 @@
                 <div class="profile-dropdown-sub">{{ dp.headline|default:"Doctor" }}</div>
               </div>
             </div>
+            </a>
             <a href="/profile/me/" class="profile-dropdown-btn">View Profile</a>
             <hr class="profile-dropdown-divider">
             <a href="/profile/me/edit/" class="profile-dropdown-item"><span class="item-icon">✏️</span> Edit Profile</a>

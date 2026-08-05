@@ -79,7 +79,7 @@ DocConnect is a verified professional network exclusively for doctors. It provid
 ### 1.5 Quick Start (TL;DR)
 
 ```bash
-git clone https://github.com/yourusername/docconnect.git && cd docconnect
+git clone https://github.com/pkdubey/docconnect.git && cd docconnect
 cp .env.example .env
 
 # Create & activate virtual environment
