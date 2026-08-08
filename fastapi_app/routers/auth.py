@@ -34,6 +34,109 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class PasswordLoginRequest(BaseModel):
+    phone: str = Field(..., pattern=r'^[6-9]\d{9}$')
+    password: str = Field(..., min_length=4)
+    user_type: str = Field(default='DOCTOR', pattern=r'^(DOCTOR|HOSPITAL_ADMIN|ADMIN)$')
+    device_id: Optional[str] = None
+
+
+class RegisterRequest(BaseModel):
+    first_name: str = Field(..., min_length=1, max_length=80)
+    last_name: str = Field(..., min_length=1, max_length=80)
+    phone: str = Field(..., pattern=r'^[6-9]\d{9}$')
+    password: str = Field(..., min_length=8)
+    user_type: str = Field(default='DOCTOR', pattern=r'^(DOCTOR|HOSPITAL_ADMIN|HOSPITAL_HR)$')
+    email: Optional[str] = None
+
+
+class RegisterResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user_id: str
+    user_type: str
+    profile_created: bool
+
+
+@router.post("/register/", response_model=RegisterResponse, status_code=201)
+async def register(request: RegisterRequest):
+    from django.contrib.auth import get_user_model
+    from rest_framework_simplejwt.tokens import RefreshToken
+
+    def _register():
+        User = get_user_model()
+        if User.objects.filter(phone=request.phone).exists():
+            raise HTTPException(status_code=409, detail="An account with this phone number already exists")
+        if request.email and User.objects.filter(email=request.email).exists():
+            raise HTTPException(status_code=409, detail="An account with this email already exists")
+
+        user = User.objects.create_user(
+            phone=request.phone,
+            user_type=request.user_type,
+            password=request.password,
+            email=request.email or None,
+        )
+        user.metadata = {'first_name': request.first_name, 'last_name': request.last_name}
+        user.save(update_fields=['metadata'])
+
+        profile_created = False
+        if request.user_type == 'DOCTOR':
+            from apps.doctors.models import DoctorProfile
+            DoctorProfile.objects.create(
+                user=user,
+                first_name=request.first_name,
+                last_name=request.last_name,
+            )
+            profile_created = True
+
+        refresh = RefreshToken.for_user(user)
+        return str(refresh.access_token), str(refresh), str(user.id), user.user_type, profile_created
+
+    try:
+        access_token, refresh_token, user_id, user_type, profile_created = await sync_to_async(_register, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return RegisterResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user_id=user_id,
+        user_type=user_type,
+        profile_created=profile_created,
+    )
+
+
+@router.post("/login/", response_model=TokenResponse)
+async def login_with_password(request: PasswordLoginRequest):
+    from django.contrib.auth import get_user_model
+    from rest_framework_simplejwt.tokens import RefreshToken
+
+    def _login():
+        User = get_user_model()
+        try:
+            user = User.objects.get(phone=request.phone)
+        except User.DoesNotExist:
+            raise HTTPException(status_code=401, detail="Invalid phone or password")
+        if not user.check_password(request.password):
+            raise HTTPException(status_code=401, detail="Invalid phone or password")
+        if user.status != 'ACTIVE':
+            raise HTTPException(status_code=403, detail="Account is not active")
+        refresh = RefreshToken.for_user(user)
+        return str(refresh.access_token), str(refresh), user.user_type
+
+    try:
+        access_token, refresh_token, user_type = await sync_to_async(_login, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
 @router.post("/send-otp/")
 async def send_otp(request: OTPRequest):
     from django.utils import timezone
