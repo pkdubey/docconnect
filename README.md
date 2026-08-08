@@ -2677,7 +2677,7 @@ This project is proprietary and confidential. Unauthorized copying, distribution
 
 - **Email**: support@docconnect.com
 - **Website**: https://docconnect.com
-- **GitHub**: https://github.com/docconnect/docconnect
+- **GitHub**: https://github.com/pkdubey/docconnect
 
 ---
 
