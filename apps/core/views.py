@@ -134,7 +134,52 @@ def home(request):
         'stats': stats,
         'urgent_jobs': urgent_jobs,
         'suggested_doctors': suggested_doctors,
+        'feed_posts': _get_feed_posts(request.user),
     })
+
+
+def _get_feed_posts(user):
+    try:
+        from apps.doctors.models import Post, PostLike
+        posts = list(Post.objects.select_related('author', 'posted_by').order_by('-created_at')[:10])
+        liked_ids = set()
+        try:
+            liked_ids = set(str(pl.post_id) for pl in PostLike.objects.filter(
+                liked_by=user, post__in=posts
+            ))
+        except Exception:
+            pass
+        result = []
+        for p in posts:
+            author_id = ''
+            photo = ''
+            headline = ''
+            if not p.is_anonymous and p.author:
+                author_id = str(p.author.id)
+                photo = p.author.photo_base64 or ''
+                headline = p.author.headline or ''
+            display = p.display_name
+            result.append({
+                'id': str(p.id),
+                'author': display,
+                'author_id': author_id,
+                'headline': headline,
+                'photo': photo,
+                'initials': 'AN' if p.is_anonymous else _get_initials(display),
+                'color': '#666' if p.is_anonymous else _color(p.posted_by_id or p.author_id or 0),
+                'post_type': p.post_type,
+                'post_type_display': p.get_post_type_display(),
+                'content': p.content,
+                'image': p.image_base64 or '',
+                'like_count': p.likes.count(),
+                'comment_count': p.comments.count(),
+                'liked': str(p.id) in liked_ids,
+                'is_mine': p.posted_by_id == user.id,
+                'created_at': p.created_at.strftime('%b %d'),
+            })
+        return result
+    except Exception:
+        return []
 
 
 @login_required
@@ -1689,6 +1734,301 @@ def my_availability_view(request):
         .prefetch_related('slots').order_by('-created_at')
     )
     return render(request, 'my_availability.html', {'availabilities': availabilities})
+
+
+@login_required
+@require_POST
+def edit_post(request, post_id):
+    try:
+        import base64
+        from apps.doctors.models import Post
+        post = Post.objects.get(id=post_id, posted_by=request.user)
+        content = request.POST.get('content', '').strip()
+        if not content:
+            return JsonResponse({'error': 'Content is required'}, status=400)
+        post.content = content
+        remove_image = request.POST.get('remove_image') == '1'
+        f = request.FILES.get('image')
+        if remove_image:
+            post.image_base64 = None
+        elif f:
+            if f.size > 5 * 1024 * 1024:
+                return JsonResponse({'error': 'Image max 5MB'}, status=400)
+            post.image_base64 = 'data:{};base64,{}'.format(f.content_type, base64.b64encode(f.read()).decode())
+        post.save(update_fields=['content', 'image_base64', 'updated_at'])
+        return JsonResponse({'success': True, 'content': post.content, 'image': post.image_base64 or ''})
+    except Post.DoesNotExist:
+        return JsonResponse({'error': 'Post not found or not yours'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_POST
+def delete_post(request, post_id):
+    try:
+        from apps.doctors.models import Post
+        Post.objects.filter(id=post_id, posted_by=request.user).delete()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_POST
+def add_comment(request, post_id):
+    try:
+        from apps.doctors.models import Post, PostComment
+        post = Post.objects.get(id=post_id)
+        content = request.POST.get('content', '').strip()
+        if not content:
+            return JsonResponse({'error': 'Comment cannot be empty'}, status=400)
+        comment = PostComment.objects.create(post=post, author=request.user, content=content)
+        name, photo = _resolve_author(request.user)
+        return JsonResponse({
+            'id': str(comment.id),
+            'author': name,
+            'photo': photo,
+            'initials': _get_initials(name),
+            'color': _color(request.user.id),
+            'content': comment.content,
+            'created_at': 'Just now',
+            'count': post.comments.filter(parent__isnull=True).count(),
+        })
+    except Post.DoesNotExist:
+        return JsonResponse({'error': 'Post not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+def _resolve_author(user):
+    name, photo = '', ''
+    if user.user_type == 'DOCTOR':
+        try:
+            dp = user.doctor_profile
+            name = f'Dr. {dp.full_name}'
+            photo = dp.photo_base64 or ''
+        except Exception:
+            pass
+    if not name:
+        meta = user.metadata or {}
+        first = meta.get('first_name', '').strip()
+        last = meta.get('last_name', '').strip()
+        name = f'{first} {last}'.strip() or user.get_user_type_display()
+    return name, photo
+
+
+@login_required
+def get_comments(request, post_id):
+    try:
+        from apps.doctors.models import Post, PostComment
+        post = Post.objects.get(id=post_id)
+        top_comments = PostComment.objects.filter(
+            post=post, parent__isnull=True
+        ).select_related('author').prefetch_related('replies__author').order_by('created_at')
+        result = []
+        for c in top_comments:
+            name, photo = _resolve_author(c.author)
+            replies = []
+            for r in c.replies.all():
+                rname, rphoto = _resolve_author(r.author)
+                replies.append({
+                    'id': str(r.id),
+                    'author': rname,
+                    'photo': rphoto,
+                    'initials': _get_initials(rname),
+                    'color': _color(r.author.id),
+                    'content': r.content,
+                    'created_at': r.created_at.strftime('%b %d'),
+                    'is_mine': r.author_id == request.user.id,
+                })
+            result.append({
+                'id': str(c.id),
+                'author': name,
+                'photo': photo,
+                'initials': _get_initials(name),
+                'color': _color(c.author.id),
+                'content': c.content,
+                'created_at': c.created_at.strftime('%b %d'),
+                'is_mine': c.author_id == request.user.id,
+                'replies': replies,
+            })
+        return JsonResponse({'comments': result})
+    except Post.DoesNotExist:
+        return JsonResponse({'error': 'Post not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_POST
+def delete_comment(request, comment_id):
+    try:
+        from apps.doctors.models import PostComment
+        PostComment.objects.filter(id=comment_id, author=request.user).delete()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_POST
+def add_reply(request, comment_id):
+    try:
+        from apps.doctors.models import PostComment
+        parent = PostComment.objects.get(id=comment_id)
+        content = request.POST.get('content', '').strip()
+        if not content:
+            return JsonResponse({'error': 'Reply cannot be empty'}, status=400)
+        reply = PostComment.objects.create(
+            post=parent.post, author=request.user, parent=parent, content=content
+        )
+        name, photo = _resolve_author(request.user)
+        return JsonResponse({
+            'id': str(reply.id),
+            'author': name,
+            'photo': photo,
+            'initials': _get_initials(name),
+            'color': _color(request.user.id),
+            'content': reply.content,
+            'created_at': 'Just now',
+            'is_mine': True,
+        })
+    except PostComment.DoesNotExist:
+        return JsonResponse({'error': 'Comment not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_POST
+def edit_comment(request, comment_id):
+    try:
+        from apps.doctors.models import PostComment
+        content = request.POST.get('content', '').strip()
+        if not content:
+            return JsonResponse({'error': 'Content cannot be empty'}, status=400)
+        comment = PostComment.objects.get(id=comment_id, author=request.user)
+        comment.content = content
+        comment.save(update_fields=['content'])
+        return JsonResponse({'success': True, 'content': comment.content})
+    except PostComment.DoesNotExist:
+        return JsonResponse({'error': 'Comment not found or not yours'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_POST
+def create_post(request):
+    try:
+        import base64
+        from apps.doctors.models import Post
+        content = request.POST.get('content', '').strip()
+        post_type = request.POST.get('post_type', 'UPDATE')
+        is_anonymous = request.POST.get('is_anonymous') == '1'
+        if not content:
+            return JsonResponse({'error': 'Content is required'}, status=400)
+        if post_type not in ('UPDATE', 'CASE', 'ARTICLE', 'PHOTO'):
+            post_type = 'UPDATE'
+        # anonymous only allowed for doctors
+        if is_anonymous and request.user.user_type != 'DOCTOR':
+            is_anonymous = False
+        image_base64 = None
+        f = request.FILES.get('image')
+        if f:
+            if f.size > 5 * 1024 * 1024:
+                return JsonResponse({'error': 'Image max 5MB'}, status=400)
+            image_base64 = 'data:{};base64,{}'.format(f.content_type, base64.b64encode(f.read()).decode())
+        doctor_profile = None
+        if request.user.user_type == 'DOCTOR':
+            try:
+                doctor_profile = request.user.doctor_profile
+            except Exception:
+                return JsonResponse({'error': 'Doctor profile not found'}, status=400)
+        post = Post.objects.create(
+            author=doctor_profile,
+            posted_by=request.user,
+            post_type=post_type,
+            content=content,
+            image_base64=image_base64,
+            is_anonymous=is_anonymous,
+        )
+        return JsonResponse({
+            'success': True,
+            'post_id': str(post.id),
+            'author': post.display_name,
+            'post_type': post.get_post_type_display(),
+            'content': post.content,
+            'image': post.image_base64 or '',
+            'created_at': 'Just now',
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_POST
+def like_post(request, post_id):
+    try:
+        from apps.doctors.models import Post, PostLike
+        post = Post.objects.get(id=post_id)
+        like, created = PostLike.objects.get_or_create(
+            post=post, liked_by=request.user,
+            defaults={'doctor': getattr(request.user, 'doctor_profile', None)}
+        )
+        if not created:
+            like.delete()
+            liked = False
+        else:
+            liked = True
+        return JsonResponse({'liked': liked, 'count': post.likes.count()})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+def feed_posts(request):
+    from apps.doctors.models import Post
+    page = int(request.GET.get('page', 1))
+    page_size = 10
+    offset = (page - 1) * page_size
+    posts = list(Post.objects.select_related('author', 'posted_by').order_by('-created_at')[offset:offset + page_size])
+    liked_ids = set()
+    try:
+        from apps.doctors.models import PostLike
+        liked_ids = set(str(pl.post_id) for pl in PostLike.objects.filter(
+            liked_by=request.user, post__in=posts
+        ))
+    except Exception:
+        pass
+    result = []
+    for p in posts:
+        author_id = ''
+        photo = ''
+        headline = ''
+        if not p.is_anonymous and p.author:
+            author_id = str(p.author.id)
+            photo = p.author.photo_base64 or ''
+            headline = p.author.headline or ''
+        display = p.display_name
+        result.append({
+            'id': str(p.id),
+            'author': display,
+            'author_id': author_id,
+            'headline': headline,
+            'photo': photo,
+            'initials': 'AN' if p.is_anonymous else _get_initials(display),
+            'color': '#666' if p.is_anonymous else _color(p.posted_by_id or p.author_id or 0),
+            'post_type': p.post_type,
+            'post_type_display': p.get_post_type_display(),
+            'content': p.content,
+            'image': p.image_base64 or '',
+            'like_count': p.likes.count(),
+            'liked': str(p.id) in liked_ids,
+            'created_at': p.created_at.strftime('%b %d'),
+        })
+    return JsonResponse({'posts': result, 'has_more': len(posts) == page_size})
 
 
 @login_required

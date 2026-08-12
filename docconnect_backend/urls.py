@@ -18,6 +18,8 @@ from apps.core.views import (
     upload_profile_photo, upload_cover_photo,
     upload_hospital_logo, hospital_applicants_view, hospital_jobs_view, my_availability_view,
     badge_counts, publish_job_view,
+    create_post, like_post, feed_posts,
+    edit_post, delete_post, add_comment, get_comments, delete_comment, edit_comment, add_reply,
 )
 
 urlpatterns = [
@@ -93,6 +95,16 @@ urlpatterns = [
 
     # API
     path('api/badge-counts/', badge_counts, name='badge_counts'),
+    path('api/posts/', feed_posts, name='feed_posts'),
+    path('api/posts/create/', create_post, name='create_post'),
+    path('api/posts/<uuid:post_id>/like/', like_post, name='like_post'),
+    path('api/posts/<uuid:post_id>/edit/', edit_post, name='edit_post'),
+    path('api/posts/<uuid:post_id>/delete/', delete_post, name='delete_post'),
+    path('api/posts/<uuid:post_id>/comments/', get_comments, name='get_comments'),
+    path('api/posts/<uuid:post_id>/comments/add/', add_comment, name='add_comment'),
+    path('api/comments/<uuid:comment_id>/delete/', delete_comment, name='delete_comment'),
+    path('api/comments/<uuid:comment_id>/edit/', edit_comment, name='edit_comment'),
+    path('api/comments/<uuid:comment_id>/reply/', add_reply, name='add_reply'),
     path('api/v1/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     path('admin/', docconnect_admin.urls),

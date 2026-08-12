@@ -1,6 +1,6 @@
 from django.contrib.admin import ModelAdmin
 from apps.core.admin_site import docconnect_admin
-from .models import DoctorProfile, DoctorRegistration, DoctorQualification, DoctorExperience
+from .models import DoctorProfile, DoctorRegistration, DoctorQualification, DoctorExperience, Post, PostLike
 
 
 class DoctorProfileAdmin(ModelAdmin):
@@ -27,7 +27,15 @@ class DoctorExperienceAdmin(ModelAdmin):
     search_fields = ('doctor__first_name', 'hospital_name')
 
 
+class PostAdmin(ModelAdmin):
+    list_display = ('author', 'post_type', 'is_anonymous', 'created_at')
+    list_filter = ('post_type', 'is_anonymous')
+    search_fields = ('author__first_name', 'content')
+    ordering = ('-created_at',)
+
+
 docconnect_admin.register(DoctorProfile, DoctorProfileAdmin)
 docconnect_admin.register(DoctorRegistration, DoctorRegistrationAdmin)
 docconnect_admin.register(DoctorQualification, DoctorQualificationAdmin)
 docconnect_admin.register(DoctorExperience, DoctorExperienceAdmin)
+docconnect_admin.register(Post, PostAdmin)
