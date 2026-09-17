@@ -1,22 +1,24 @@
 from datetime import date, time
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from asgiref.sync import sync_to_async
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from fastapi_app.dependencies import get_current_doctor, get_current_user
 
 router = APIRouter(prefix="/api/v1/shifts", tags=["Shifts"])
 
 
+# ── Request Schemas ───────────────────────────────────────────
+
 class Location(BaseModel):
     address: Optional[str] = None
     city: str
     state: str
     pincode: Optional[str] = None
-    coordinates: Optional[dict] = None
+    coordinates: Optional[Dict[str, Any]] = None
 
 
 class ShiftRequirementCreate(BaseModel):
@@ -38,26 +40,113 @@ class ShiftRespondRequest(BaseModel):
     accept: bool
 
 
-def _req_dict(r):
-    return {
-        "id": str(r.id),
-        "hospital_id": str(r.hospital_id),
-        "specialty_id": str(r.specialty_id),
-        "requirement_date": str(r.requirement_date),
-        "start_time": str(r.start_time),
-        "end_time": str(r.end_time),
-        "location": r.location,
-        "compensation": str(r.compensation),
-        "currency": r.currency,
-        "doctors_required": r.doctors_required,
-        "urgency": r.urgency,
-        "status": r.status,
-        "notes": r.notes,
-        "created_at": r.created_at.isoformat(),
-    }
+# ── Response Schemas ──────────────────────────────────────────
+
+class ShiftRequirementOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "hospital_id": "550e8400-e29b-41d4-a716-446655440001",
+        "specialty_id": "550e8400-e29b-41d4-a716-446655440002",
+        "requirement_date": "2025-08-18", "start_time": "08:00:00", "end_time": "20:00:00",
+        "location": {"city": "Mumbai", "state": "Maharashtra"},
+        "compensation": "12000", "currency": "INR", "doctors_required": 2,
+        "urgency": "URGENT", "status": "OPEN", "notes": None, "created_at": "2025-01-01T00:00:00Z"
+    }})
+    id: str
+    hospital_id: str
+    specialty_id: str
+    requirement_date: str
+    start_time: str
+    end_time: str
+    location: Dict[str, Any]
+    compensation: str
+    currency: str
+    doctors_required: int
+    urgency: str
+    status: str
+    notes: Optional[str]
+    created_at: str
 
 
-@router.post("/requirements/", status_code=201)
+class ShiftRequirementsListResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {"total": 1, "page": 1, "results": []}})
+    total: int
+    page: int
+    results: List[ShiftRequirementOut]
+
+
+class ShiftRequestOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "requirement_id": "550e8400-e29b-41d4-a716-446655440001",
+        "hospital_name": "Apollo Hospital", "requirement_date": "2025-08-18",
+        "start_time": "08:00:00", "end_time": "20:00:00", "compensation": "12000",
+        "urgency": "URGENT", "status": "REQUESTED", "requested_at": "2025-01-01T00:00:00Z"
+    }})
+    id: str
+    requirement_id: str
+    hospital_name: str
+    requirement_date: str
+    start_time: str
+    end_time: str
+    compensation: str
+    urgency: str
+    status: str
+    requested_at: str
+
+
+class ShiftActionOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {"success": True, "status": "ACCEPTED_BY_DOCTOR"}})
+    success: bool
+    status: str
+
+
+class MatchedDoctorOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "doctor_id": "550e8400-e29b-41d4-a716-446655440000", "full_name": "Arjun Sharma",
+        "headline": "Cardiologist · 12 yrs", "experience_years": 12.0,
+        "verification_status": "VERIFIED",
+        "availability_id": "550e8400-e29b-41d4-a716-446655440001", "minimum_compensation": "8000"
+    }})
+    doctor_id: str
+    full_name: str
+    headline: Optional[str]
+    experience_years: float
+    verification_status: str
+    availability_id: str
+    minimum_compensation: Optional[str]
+
+
+class MatchedDoctorsResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {"total": 1, "matched_doctors": []}})
+    total: int
+    matched_doctors: List[MatchedDoctorOut]
+
+
+# ── Helper ────────────────────────────────────────────────────
+
+def _req_dict(r) -> ShiftRequirementOut:
+    return ShiftRequirementOut(
+        id=str(r.id),
+        hospital_id=str(r.hospital_id),
+        specialty_id=str(r.specialty_id),
+        requirement_date=str(r.requirement_date),
+        start_time=str(r.start_time),
+        end_time=str(r.end_time),
+        location=r.location or {},
+        compensation=str(r.compensation),
+        currency=r.currency,
+        doctors_required=r.doctors_required,
+        urgency=r.urgency,
+        status=r.status,
+        notes=r.notes,
+        created_at=r.created_at.isoformat(),
+    )
+
+
+# ── Endpoints ─────────────────────────────────────────────────
+
+@router.post("/requirements/", response_model=ShiftRequirementOut, status_code=201, summary="Post a shift requirement")
 async def create_shift_requirement(req: ShiftRequirementCreate, current_user=Depends(get_current_user)):
     from apps.hospitals.models import HospitalUser
     from apps.shifts.models import ShiftRequirement
@@ -84,7 +173,7 @@ async def create_shift_requirement(req: ShiftRequirementCreate, current_user=Dep
     return _req_dict(sr)
 
 
-@router.get("/requirements/mine/")
+@router.get("/requirements/mine/", response_model=List[ShiftRequirementOut], summary="My hospital's shift requirements")
 async def my_hospital_requirements(current_user=Depends(get_current_user)):
     from apps.hospitals.models import HospitalUser
     from apps.shifts.models import ShiftRequirement
@@ -103,7 +192,7 @@ async def my_hospital_requirements(current_user=Depends(get_current_user)):
     return [_req_dict(r) for r in reqs]
 
 
-@router.get("/requirements/")
+@router.get("/requirements/", response_model=ShiftRequirementsListResponse, summary="List open shift requirements")
 async def list_shift_requirements(
     urgency: Optional[str] = Query(None),
     city: Optional[str] = Query(None),
@@ -127,35 +216,32 @@ async def list_shift_requirements(
         return total, results
 
     total, results = await sync_to_async(_list, thread_sensitive=True)()
-    return {"total": total, "page": page, "results": [_req_dict(r) for r in results]}
+    return ShiftRequirementsListResponse(total=total, page=page, results=[_req_dict(r) for r in results])
 
 
-@router.get("/requests/mine/")
+@router.get("/requests/mine/", response_model=List[ShiftRequestOut], summary="Doctor's shift requests")
 async def my_shift_requests(current_doctor=Depends(get_current_doctor)):
     from apps.shifts.models import ShiftRequest
 
-    def _list():
-        reqs = ShiftRequest.objects.filter(doctor=current_doctor).select_related(
-            'requirement', 'requirement__hospital'
-        ).order_by('-requested_at')
-        return list(reqs)
-
-    reqs = await sync_to_async(_list, thread_sensitive=True)()
-    return [{
-        "id": str(r.id),
-        "requirement_id": str(r.requirement_id),
-        "hospital_name": r.requirement.hospital.name,
-        "requirement_date": str(r.requirement.requirement_date),
-        "start_time": str(r.requirement.start_time),
-        "end_time": str(r.requirement.end_time),
-        "compensation": str(r.requirement.compensation),
-        "urgency": r.requirement.urgency,
-        "status": r.status,
-        "requested_at": r.requested_at.isoformat(),
-    } for r in reqs]
+    reqs = await sync_to_async(
+        lambda: list(ShiftRequest.objects.filter(doctor=current_doctor)
+                     .select_related('requirement', 'requirement__hospital')
+                     .order_by('-requested_at')),
+        thread_sensitive=True,
+    )()
+    return [ShiftRequestOut(
+        id=str(r.id), requirement_id=str(r.requirement_id),
+        hospital_name=r.requirement.hospital.name,
+        requirement_date=str(r.requirement.requirement_date),
+        start_time=str(r.requirement.start_time),
+        end_time=str(r.requirement.end_time),
+        compensation=str(r.requirement.compensation),
+        urgency=r.requirement.urgency, status=r.status,
+        requested_at=r.requested_at.isoformat(),
+    ) for r in reqs]
 
 
-@router.post("/requirements/{requirement_id}/request/", status_code=201)
+@router.post("/requirements/{requirement_id}/request/", response_model=ShiftActionOut, status_code=201, summary="Doctor requests a shift")
 async def request_shift(requirement_id: str, current_doctor=Depends(get_current_doctor)):
     from apps.shifts.models import ShiftRequirement, ShiftRequest
 
@@ -172,10 +258,10 @@ async def request_shift(requirement_id: str, current_doctor=Depends(get_current_
         sr = await sync_to_async(_create, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"success": True, "shift_request_id": str(sr.id), "status": sr.status}
+    return ShiftActionOut(success=True, status=sr.status)
 
 
-@router.patch("/requests/{request_id}/respond/")
+@router.patch("/requests/{request_id}/respond/", response_model=ShiftActionOut, summary="Doctor accepts or declines shift")
 async def respond_to_shift(request_id: str, body: ShiftRespondRequest, current_doctor=Depends(get_current_doctor)):
     from apps.shifts.models import ShiftRequest
     from django.utils import timezone
@@ -198,10 +284,10 @@ async def respond_to_shift(request_id: str, body: ShiftRespondRequest, current_d
         new_status = await sync_to_async(_respond, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"success": True, "status": new_status}
+    return ShiftActionOut(success=True, status=new_status)
 
 
-@router.patch("/requests/{request_id}/confirm/")
+@router.patch("/requests/{request_id}/confirm/", response_model=ShiftActionOut, summary="Hospital confirms shift")
 async def confirm_shift(request_id: str, current_user=Depends(get_current_user)):
     from apps.hospitals.models import HospitalUser
     from apps.shifts.models import ShiftRequest
@@ -227,10 +313,10 @@ async def confirm_shift(request_id: str, current_user=Depends(get_current_user))
         new_status = await sync_to_async(_confirm, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"success": True, "status": new_status}
+    return ShiftActionOut(success=True, status=new_status)
 
 
-@router.patch("/requests/{request_id}/complete/")
+@router.patch("/requests/{request_id}/complete/", response_model=ShiftActionOut, summary="Mark shift as completed")
 async def complete_shift(request_id: str, current_user=Depends(get_current_user)):
     from apps.hospitals.models import HospitalUser
     from apps.shifts.models import ShiftRequest
@@ -251,8 +337,7 @@ async def complete_shift(request_id: str, current_user=Depends(get_current_user)
         sr.completed_at = timezone.now()
         sr.save()
         req = sr.requirement
-        confirmed = req.requests.filter(status__in=['CONFIRMED_BY_HOSPITAL', 'COMPLETED']).count()
-        if confirmed >= req.doctors_required:
+        if req.requests.filter(status__in=['CONFIRMED_BY_HOSPITAL', 'COMPLETED']).count() >= req.doctors_required:
             req.status = 'FILLED'
             req.save(update_fields=['status'])
         return sr.status
@@ -261,10 +346,10 @@ async def complete_shift(request_id: str, current_user=Depends(get_current_user)
         new_status = await sync_to_async(_complete, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"success": True, "status": new_status}
+    return ShiftActionOut(success=True, status=new_status)
 
 
-@router.patch("/requests/{request_id}/cancel/")
+@router.patch("/requests/{request_id}/cancel/", response_model=ShiftActionOut, summary="Cancel a shift request")
 async def cancel_shift_request(request_id: str, current_user=Depends(get_current_user)):
     from apps.shifts.models import ShiftRequest
     from django.utils import timezone
@@ -294,10 +379,10 @@ async def cancel_shift_request(request_id: str, current_user=Depends(get_current
         await sync_to_async(_cancel, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"success": True, "status": "CANCELLED"}
+    return ShiftActionOut(success=True, status="CANCELLED")
 
 
-@router.get("/requirements/{requirement_id}/matched-doctors/")
+@router.get("/requirements/{requirement_id}/matched-doctors/", response_model=MatchedDoctorsResponse, summary="Get matched doctors for a shift requirement")
 async def matched_doctors(requirement_id: str, current_user=Depends(get_current_user)):
     from apps.hospitals.models import HospitalUser
     from apps.shifts.models import ShiftRequirement
@@ -333,28 +418,25 @@ async def matched_doctors(requirement_id: str, current_user=Depends(get_current_
         for avail in matched:
             if avail.doctor_id in seen:
                 continue
-            slot_match = avail.slots.filter(
+            if avail.slots.filter(
                 slot_date=req.requirement_date,
                 start_time__lte=req.start_time,
                 end_time__gte=req.end_time,
                 is_booked=False,
-            ).exists()
-            if slot_match:
+            ).exists():
                 seen.add(avail.doctor_id)
                 d = avail.doctor
-                result.append({
-                    "doctor_id": str(d.id),
-                    "full_name": d.full_name,
-                    "headline": d.headline,
-                    "experience_years": float(d.experience_years),
-                    "verification_status": d.verification_status,
-                    "availability_id": str(avail.id),
-                    "minimum_compensation": str(avail.minimum_compensation) if avail.minimum_compensation else None,
-                })
+                result.append(MatchedDoctorOut(
+                    doctor_id=str(d.id), full_name=d.full_name,
+                    headline=d.headline, experience_years=float(d.experience_years),
+                    verification_status=d.verification_status,
+                    availability_id=str(avail.id),
+                    minimum_compensation=str(avail.minimum_compensation) if avail.minimum_compensation else None,
+                ))
         return result
 
     try:
         result = await sync_to_async(_match, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"total": len(result), "matched_doctors": result}
+    return MatchedDoctorsResponse(total=len(result), matched_doctors=result)

@@ -1,23 +1,25 @@
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from asgiref.sync import sync_to_async
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from fastapi_app.dependencies import get_current_doctor, get_current_user
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["Jobs"])
 
 
+# ── Request Schemas ───────────────────────────────────────────
+
 class Location(BaseModel):
     address: Optional[str] = None
     city: str
     state: str
     pincode: Optional[str] = None
-    coordinates: Optional[dict] = None
+    coordinates: Optional[Dict[str, Any]] = None
 
 
 class JobType(str, Enum):
@@ -61,7 +63,148 @@ class ApplicationStatusUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-@router.post("/", status_code=201)
+# ── Response Schemas ──────────────────────────────────────────
+
+class JobCreateOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000", "title": "Senior Cardiologist",
+        "status": "PUBLISHED", "created_at": "2025-01-01T00:00:00Z"
+    }})
+    id: str
+    title: str
+    status: str
+    created_at: str
+
+
+class JobListItem(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000", "title": "Senior Cardiologist",
+        "hospital_name": "Apollo Hospital", "job_type": "FULL_TIME",
+        "location": {"city": "Mumbai", "state": "Maharashtra"}, "is_urgent": False,
+        "salary_min": "150000", "salary_max": "250000", "salary_visibility": "PUBLIC",
+        "published_at": "2025-01-01T00:00:00Z"
+    }})
+    id: str
+    title: str
+    hospital_name: str
+    job_type: str
+    location: Dict[str, Any]
+    is_urgent: bool
+    salary_min: Optional[str]
+    salary_max: Optional[str]
+    salary_visibility: str
+    published_at: Optional[str]
+
+
+class JobListResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "total": 1, "page": 1, "page_size": 20, "results": []
+    }})
+    total: int
+    page: int
+    page_size: int
+    results: List[JobListItem]
+
+
+class JobDetailOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000", "title": "Senior Cardiologist",
+        "hospital_id": "550e8400-e29b-41d4-a716-446655440001", "hospital_name": "Apollo Hospital",
+        "description": "Looking for a senior cardiologist.", "responsibilities": None, "requirements": None,
+        "location": {"city": "Mumbai", "state": "Maharashtra"}, "job_type": "FULL_TIME",
+        "shift_type": "DAY", "experience_min_years": 5.0, "experience_max_years": None,
+        "salary_min": "150000", "salary_max": "250000", "salary_visibility": "PUBLIC",
+        "positions": 1, "is_urgent": False, "closing_date": None
+    }})
+    id: str
+    title: str
+    hospital_id: str
+    hospital_name: str
+    description: str
+    responsibilities: Optional[str]
+    requirements: Optional[str]
+    location: Dict[str, Any]
+    job_type: str
+    shift_type: str
+    experience_min_years: float
+    experience_max_years: Optional[float]
+    salary_min: Optional[str]
+    salary_max: Optional[str]
+    salary_visibility: str
+    positions: int
+    is_urgent: bool
+    closing_date: Optional[str]
+
+
+class ApplyOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "success": True, "application_id": "550e8400-e29b-41d4-a716-446655440000", "status": "APPLIED"
+    }})
+    success: bool
+    application_id: str
+    status: str
+
+
+class WithdrawOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {"success": True, "status": "WITHDRAWN"}})
+    success: bool
+    status: str
+
+
+class ApplicationItem(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "application_id": "550e8400-e29b-41d4-a716-446655440000",
+        "job_id": "550e8400-e29b-41d4-a716-446655440001",
+        "job_title": "Senior Cardiologist", "hospital_name": "Apollo Hospital",
+        "status": "APPLIED", "applied_at": "2025-01-01T00:00:00Z"
+    }})
+    application_id: str
+    job_id: str
+    job_title: str
+    hospital_name: str
+    status: str
+    applied_at: str
+
+
+class MyApplicationsResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {"total": 1, "page": 1, "results": []}})
+    total: int
+    page: int
+    results: List[ApplicationItem]
+
+
+class ApplicantItem(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "application_id": "550e8400-e29b-41d4-a716-446655440000",
+        "doctor_id": "550e8400-e29b-41d4-a716-446655440001",
+        "doctor_name": "Arjun Sharma", "status": "APPLIED", "applied_at": "2025-01-01T00:00:00Z"
+    }})
+    application_id: str
+    doctor_id: str
+    doctor_name: str
+    status: str
+    applied_at: str
+
+
+class ApplicantsResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {"total": 1, "page": 1, "results": []}})
+    total: int
+    page: int
+    results: List[ApplicantItem]
+
+
+class ApplicationStatusOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "success": True, "application_id": "550e8400-e29b-41d4-a716-446655440000", "status": "SHORTLISTED"
+    }})
+    success: bool
+    application_id: str
+    status: str
+
+
+# ── Endpoints ─────────────────────────────────────────────────
+
+@router.post("/", response_model=JobCreateOut, status_code=201, summary="Create a job posting")
 async def create_job(job: JobCreate, current_user=Depends(get_current_user)):
     from apps.hospitals.models import HospitalUser
     from apps.jobs.models import JobPost
@@ -92,10 +235,10 @@ async def create_job(job: JobCreate, current_user=Depends(get_current_user)):
         jp = await sync_to_async(_create, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"id": str(jp.id), "title": jp.title, "status": jp.status, "created_at": jp.created_at.isoformat()}
+    return JobCreateOut(id=str(jp.id), title=jp.title, status=jp.status, created_at=jp.created_at.isoformat())
 
 
-@router.get("/my-applications/")
+@router.get("/my-applications/", response_model=MyApplicationsResponse, summary="Doctor's job applications")
 async def my_applications(
     status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
@@ -113,15 +256,17 @@ async def my_applications(
         return total, results
 
     total, results = await sync_to_async(_list, thread_sensitive=True)()
-    return {
-        "total": total, "page": page,
-        "results": [{"application_id": str(a.id), "job_id": str(a.job_id), "job_title": a.job.title,
-                     "hospital_name": a.job.hospital.name, "status": a.status,
-                     "applied_at": a.applied_at.isoformat()} for a in results],
-    }
+    return MyApplicationsResponse(
+        total=total, page=page,
+        results=[ApplicationItem(
+            application_id=str(a.id), job_id=str(a.job_id),
+            job_title=a.job.title, hospital_name=a.job.hospital.name,
+            status=a.status, applied_at=a.applied_at.isoformat(),
+        ) for a in results],
+    )
 
 
-@router.get("/")
+@router.get("/", response_model=JobListResponse, summary="List published jobs")
 async def list_jobs(
     specialty: Optional[str] = Query(None),
     city: Optional[str] = Query(None),
@@ -157,21 +302,20 @@ async def list_jobs(
         return total, results
 
     total, results = await sync_to_async(_list, thread_sensitive=True)()
-    return {
-        "total": total, "page": page, "page_size": page_size,
-        "results": [
-            {"id": str(j.id), "title": j.title, "hospital_name": j.hospital.name,
-             "job_type": j.job_type, "location": j.location, "is_urgent": j.is_urgent,
-             "salary_min": str(j.salary_min) if j.salary_min else None,
-             "salary_max": str(j.salary_max) if j.salary_max else None,
-             "salary_visibility": j.salary_visibility,
-             "published_at": j.published_at.isoformat() if j.published_at else None}
-            for j in results
-        ],
-    }
+    return JobListResponse(
+        total=total, page=page, page_size=page_size,
+        results=[JobListItem(
+            id=str(j.id), title=j.title, hospital_name=j.hospital.name,
+            job_type=j.job_type, location=j.location or {}, is_urgent=j.is_urgent,
+            salary_min=str(j.salary_min) if j.salary_min else None,
+            salary_max=str(j.salary_max) if j.salary_max else None,
+            salary_visibility=j.salary_visibility,
+            published_at=j.published_at.isoformat() if j.published_at else None,
+        ) for j in results],
+    )
 
 
-@router.get("/{job_id}/")
+@router.get("/{job_id}/", response_model=JobDetailOut, summary="Get job details")
 async def get_job(job_id: str, current_user=Depends(get_current_user)):
     from apps.jobs.models import JobPost
 
@@ -184,21 +328,22 @@ async def get_job(job_id: str, current_user=Depends(get_current_user)):
     j = await sync_to_async(_get, thread_sensitive=True)()
     if j is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return {
-        "id": str(j.id), "title": j.title, "hospital_id": str(j.hospital_id),
-        "hospital_name": j.hospital.name, "description": j.description,
-        "responsibilities": j.responsibilities, "requirements": j.requirements,
-        "location": j.location, "job_type": j.job_type, "shift_type": j.shift_type,
-        "experience_min_years": float(j.experience_min_years),
-        "experience_max_years": float(j.experience_max_years) if j.experience_max_years else None,
-        "salary_min": str(j.salary_min) if j.salary_min else None,
-        "salary_max": str(j.salary_max) if j.salary_max else None,
-        "salary_visibility": j.salary_visibility, "positions": j.positions,
-        "is_urgent": j.is_urgent, "closing_date": j.closing_date.isoformat() if j.closing_date else None,
-    }
+    return JobDetailOut(
+        id=str(j.id), title=j.title, hospital_id=str(j.hospital_id),
+        hospital_name=j.hospital.name, description=j.description,
+        responsibilities=j.responsibilities, requirements=j.requirements,
+        location=j.location or {}, job_type=j.job_type, shift_type=j.shift_type,
+        experience_min_years=float(j.experience_min_years),
+        experience_max_years=float(j.experience_max_years) if j.experience_max_years else None,
+        salary_min=str(j.salary_min) if j.salary_min else None,
+        salary_max=str(j.salary_max) if j.salary_max else None,
+        salary_visibility=j.salary_visibility, positions=j.positions,
+        is_urgent=j.is_urgent,
+        closing_date=j.closing_date.isoformat() if j.closing_date else None,
+    )
 
 
-@router.post("/{job_id}/apply/", status_code=201)
+@router.post("/{job_id}/apply/", response_model=ApplyOut, status_code=201, summary="Apply to a job")
 async def apply_to_job(job_id: str, cv_file_id: Optional[str] = None, current_doctor=Depends(get_current_doctor)):
     from apps.jobs.models import JobApplication, JobPost
 
@@ -215,10 +360,10 @@ async def apply_to_job(job_id: str, cv_file_id: Optional[str] = None, current_do
         app_obj = await sync_to_async(_apply, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"success": True, "application_id": str(app_obj.id), "status": app_obj.status}
+    return ApplyOut(success=True, application_id=str(app_obj.id), status=app_obj.status)
 
 
-@router.post("/{job_id}/withdraw/")
+@router.post("/{job_id}/withdraw/", response_model=WithdrawOut, summary="Withdraw job application")
 async def withdraw_application(job_id: str, current_doctor=Depends(get_current_doctor)):
     from apps.jobs.models import JobApplication
 
@@ -231,16 +376,15 @@ async def withdraw_application(job_id: str, current_doctor=Depends(get_current_d
             raise HTTPException(status_code=400, detail=f"Cannot withdraw from status: {app_obj.status}")
         app_obj.status = 'WITHDRAWN'
         app_obj.save(update_fields=['status', 'updated_at'])
-        return app_obj
 
     try:
         await sync_to_async(_withdraw, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"success": True, "status": "WITHDRAWN"}
+    return WithdrawOut(success=True, status="WITHDRAWN")
 
 
-@router.get("/{job_id}/applications/")
+@router.get("/{job_id}/applications/", response_model=ApplicantsResponse, summary="List applicants for a job")
 async def list_job_applications(
     job_id: str,
     status: Optional[str] = Query(None),
@@ -271,15 +415,17 @@ async def list_job_applications(
         total, results = await sync_to_async(_list, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {
-        "total": total, "page": page,
-        "results": [{"application_id": str(a.id), "doctor_id": str(a.doctor_id),
-                     "doctor_name": a.doctor.full_name, "status": a.status,
-                     "applied_at": a.applied_at.isoformat()} for a in results],
-    }
+    return ApplicantsResponse(
+        total=total, page=page,
+        results=[ApplicantItem(
+            application_id=str(a.id), doctor_id=str(a.doctor_id),
+            doctor_name=a.doctor.full_name, status=a.status,
+            applied_at=a.applied_at.isoformat(),
+        ) for a in results],
+    )
 
 
-@router.patch("/applications/{application_id}/status/")
+@router.patch("/applications/{application_id}/status/", response_model=ApplicationStatusOut, summary="Update application status")
 async def update_application_status(
     application_id: str,
     body: ApplicationStatusUpdate,
@@ -311,4 +457,4 @@ async def update_application_status(
         await sync_to_async(_update, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"success": True, "application_id": application_id, "status": body.status}
+    return ApplicationStatusOut(success=True, application_id=application_id, status=body.status)

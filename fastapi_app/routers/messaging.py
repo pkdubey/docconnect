@@ -1,13 +1,15 @@
-from typing import Optional
+from typing import List, Optional
 
 from asgiref.sync import sync_to_async
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from fastapi_app.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/v1/messages", tags=["Messaging"])
 
+
+# ── Request Schemas ───────────────────────────────────────────
 
 class ConversationCreate(BaseModel):
     participant_user_id: str
@@ -18,7 +20,61 @@ class MessageCreate(BaseModel):
     message_type: str = Field("TEXT", pattern=r'^(TEXT|IMAGE|DOCUMENT|SHIFT_REQUEST|JOB_REFERRAL)$')
 
 
-@router.post("/conversations/", status_code=201)
+# ── Response Schemas ──────────────────────────────────────────
+
+class ConversationCreateOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "conversation_id": "550e8400-e29b-41d4-a716-446655440000", "existing": False
+    }})
+    conversation_id: str
+    existing: bool
+
+
+class ConversationItem(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "conversation_id": "550e8400-e29b-41d4-a716-446655440000", "type": "DIRECT",
+        "last_message": "Hello doctor", "last_message_at": "2025-01-01T00:00:00Z", "last_read_at": None
+    }})
+    conversation_id: str
+    type: str
+    last_message: Optional[str]
+    last_message_at: Optional[str]
+    last_read_at: Optional[str]
+
+
+class MessageItem(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "sender_id": "550e8400-e29b-41d4-a716-446655440001",
+        "content": "Hello doctor", "message_type": "TEXT",
+        "file_id": None, "created_at": "2025-01-01T00:00:00Z"
+    }})
+    id: str
+    sender_id: str
+    content: str
+    message_type: str
+    file_id: Optional[str]
+    created_at: str
+
+
+class MessagesResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {"total": 1, "page": 1, "messages": []}})
+    total: int
+    page: int
+    messages: List[MessageItem]
+
+
+class SendMessageOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000", "created_at": "2025-01-01T00:00:00Z"
+    }})
+    id: str
+    created_at: str
+
+
+# ── Endpoints ─────────────────────────────────────────────────
+
+@router.post("/conversations/", response_model=ConversationCreateOut, status_code=201, summary="Start a conversation")
 async def start_conversation(data: ConversationCreate, current_user=Depends(get_current_user)):
     from django.contrib.auth import get_user_model
     from apps.messaging.models import Conversation, ConversationParticipant
@@ -29,7 +85,6 @@ async def start_conversation(data: ConversationCreate, current_user=Depends(get_
             other_user = User.objects.get(id=data.participant_user_id)
         except User.DoesNotExist:
             raise HTTPException(status_code=404, detail="User not found")
-
         existing = (
             ConversationParticipant.objects.filter(user=current_user, conversation__type='DIRECT')
             .values_list('conversation_id', flat=True)
@@ -39,7 +94,6 @@ async def start_conversation(data: ConversationCreate, current_user=Depends(get_
         ).first()
         if shared:
             return str(shared.conversation_id), True
-
         conv = Conversation.objects.create(type='DIRECT')
         ConversationParticipant.objects.bulk_create([
             ConversationParticipant(conversation=conv, user=current_user),
@@ -51,10 +105,10 @@ async def start_conversation(data: ConversationCreate, current_user=Depends(get_
         conv_id, existing = await sync_to_async(_create, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"conversation_id": conv_id, "existing": existing}
+    return ConversationCreateOut(conversation_id=conv_id, existing=existing)
 
 
-@router.get("/conversations/")
+@router.get("/conversations/", response_model=List[ConversationItem], summary="List my conversations")
 async def list_conversations(current_user=Depends(get_current_user)):
     from apps.messaging.models import ConversationParticipant, Message
 
@@ -68,19 +122,19 @@ async def list_conversations(current_user=Depends(get_current_user)):
         result = []
         for p in participants:
             last_msg = Message.objects.filter(conversation=p.conversation).order_by('-created_at').first()
-            result.append({
-                "conversation_id": str(p.conversation_id),
-                "type": p.conversation.type,
-                "last_message": last_msg.content if last_msg else None,
-                "last_message_at": last_msg.created_at.isoformat() if last_msg else None,
-                "last_read_at": p.last_read_at.isoformat() if p.last_read_at else None,
-            })
+            result.append(ConversationItem(
+                conversation_id=str(p.conversation_id),
+                type=p.conversation.type,
+                last_message=last_msg.content if last_msg else None,
+                last_message_at=last_msg.created_at.isoformat() if last_msg else None,
+                last_read_at=p.last_read_at.isoformat() if p.last_read_at else None,
+            ))
         return result
 
     return await sync_to_async(_list, thread_sensitive=True)()
 
 
-@router.get("/conversations/{conversation_id}/messages/")
+@router.get("/conversations/{conversation_id}/messages/", response_model=MessagesResponse, summary="Get messages in a conversation")
 async def get_messages(
     conversation_id: str,
     page: int = Query(1, ge=1),
@@ -107,18 +161,18 @@ async def get_messages(
         total, messages = await sync_to_async(_get, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {
-        "total": total, "page": page,
-        "messages": [{
-            "id": str(m.id), "sender_id": str(m.sender_id),
-            "content": m.content, "message_type": m.message_type,
-            "file_id": str(m.file_id) if m.file_id else None,
-            "created_at": m.created_at.isoformat(),
-        } for m in messages],
-    }
+    return MessagesResponse(
+        total=total, page=page,
+        messages=[MessageItem(
+            id=str(m.id), sender_id=str(m.sender_id),
+            content=m.content, message_type=m.message_type,
+            file_id=str(m.file_id) if m.file_id else None,
+            created_at=m.created_at.isoformat(),
+        ) for m in messages],
+    )
 
 
-@router.post("/conversations/{conversation_id}/messages/", status_code=201)
+@router.post("/conversations/{conversation_id}/messages/", response_model=SendMessageOut, status_code=201, summary="Send a message")
 async def send_message(conversation_id: str, data: MessageCreate, current_user=Depends(get_current_user)):
     from apps.messaging.models import Conversation, ConversationParticipant, Message
 
@@ -138,4 +192,4 @@ async def send_message(conversation_id: str, data: MessageCreate, current_user=D
         msg = await sync_to_async(_send, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"id": str(msg.id), "created_at": msg.created_at.isoformat()}
+    return SendMessageOut(id=str(msg.id), created_at=msg.created_at.isoformat())

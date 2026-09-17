@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from asgiref.sync import sync_to_async
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from fastapi_app.dependencies import get_current_user
 
@@ -12,6 +12,13 @@ router = APIRouter(prefix="/api/v1/notifications", tags=["Notifications"])
 # ── Response Schemas ──────────────────────────────────────────
 
 class NotificationOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000", "type": "JOB_ALERT",
+        "title": "New job match", "body": "Apollo Hospital posted a Cardiologist role",
+        "data": {"job_id": "550e8400-e29b-41d4-a716-446655440001"},
+        "deep_link": "/jobs/550e8400-e29b-41d4-a716-446655440001",
+        "is_read": False, "created_at": "2025-01-01T00:00:00Z"
+    }})
     id: str
     type: str
     title: str
@@ -23,6 +30,9 @@ class NotificationOut(BaseModel):
 
 
 class NotificationListResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "total": 5, "page": 1, "page_size": 20, "unread_count": 3, "results": []
+    }})
     total: int
     page: int
     page_size: int
@@ -31,16 +41,21 @@ class NotificationListResponse(BaseModel):
 
 
 class UnreadCountResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {"unread_count": 3}})
     unread_count: int
 
 
 class MarkReadResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "success": True, "notification_id": "550e8400-e29b-41d4-a716-446655440000", "is_read": True
+    }})
     success: bool
     notification_id: str
     is_read: bool
 
 
 class MarkAllReadResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {"success": True, "marked_read": 5}})
     success: bool
     marked_read: int
 

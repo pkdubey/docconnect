@@ -1,21 +1,23 @@
 from datetime import date
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from asgiref.sync import sync_to_async
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from fastapi_app.dependencies import get_current_doctor, get_current_user
 
 router = APIRouter(prefix="/api/v1/doctors", tags=["Doctors"])
 
 
+# ── Request Schemas ───────────────────────────────────────────
+
 class Location(BaseModel):
     address: Optional[str] = None
     city: str
     state: str
     pincode: Optional[str] = None
-    coordinates: Optional[dict] = None
+    coordinates: Optional[Dict[str, Any]] = None
 
 
 class DoctorProfileCreate(BaseModel):
@@ -65,29 +67,137 @@ class DoctorExperienceCreate(BaseModel):
     description: Optional[str] = None
 
 
-def _profile_dict(dp):
-    return {
-        "id": str(dp.id),
-        "user_id": str(dp.user_id),
-        "first_name": dp.first_name,
-        "last_name": dp.last_name,
-        "full_name": dp.full_name,
-        "photo_file_id": str(dp.photo_file_id) if dp.photo_file_id else None,
-        "headline": dp.headline,
-        "about": dp.about,
-        "primary_specialization_id": str(dp.primary_specialization_id) if dp.primary_specialization_id else None,
-        "clinical_interests": [str(i) for i in (dp.clinical_interests or [])],
-        "professional_location": dp.professional_location,
-        "experience_years": float(dp.experience_years),
-        "open_to_opportunities": dp.open_to_opportunities,
-        "verification_status": dp.verification_status,
-        "is_verified": dp.is_verified,
-        "created_at": dp.created_at.isoformat(),
-        "updated_at": dp.updated_at.isoformat(),
-    }
+# ── Response Schemas ──────────────────────────────────────────
+
+class DoctorProfileOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "user_id": "550e8400-e29b-41d4-a716-446655440001",
+        "first_name": "Arjun", "last_name": "Sharma", "full_name": "Arjun Sharma",
+        "photo_file_id": None, "headline": "Cardiologist · AIIMS Delhi · 12 yrs",
+        "about": "Senior cardiologist with 12 years experience.",
+        "primary_specialization_id": "550e8400-e29b-41d4-a716-446655440002",
+        "clinical_interests": [], "professional_location": {"city": "Mumbai", "state": "Maharashtra"},
+        "experience_years": 12.0, "open_to_opportunities": True,
+        "verification_status": "VERIFIED", "is_verified": True,
+        "created_at": "2025-01-01T00:00:00Z", "updated_at": "2025-01-01T00:00:00Z"
+    }})
+    id: str
+    user_id: str
+    first_name: str
+    last_name: str
+    full_name: str
+    photo_file_id: Optional[str]
+    headline: Optional[str]
+    about: Optional[str]
+    primary_specialization_id: Optional[str]
+    clinical_interests: List[str]
+    professional_location: Optional[Dict[str, Any]]
+    experience_years: float
+    open_to_opportunities: bool
+    verification_status: str
+    is_verified: bool
+    created_at: str
+    updated_at: str
 
 
-@router.post("/profile/", status_code=201)
+class DoctorSearchResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "total": 1, "page": 1, "page_size": 20, "results": []
+    }})
+    total: int
+    page: int
+    page_size: int
+    results: List[DoctorProfileOut]
+
+
+class RegistrationOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "council_id": "550e8400-e29b-41d4-a716-446655440001",
+        "registration_number": "MH-12345", "registration_year": 2010,
+        "is_primary": True, "verification_status": "PENDING"
+    }})
+    id: str
+    council_id: str
+    registration_number: str
+    registration_year: int
+    is_primary: bool
+    verification_status: str
+
+
+class RegistrationCreateOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "registration_number": "MH-12345", "verification_status": "PENDING"
+    }})
+    id: str
+    registration_number: str
+    verification_status: str
+
+
+class QualificationOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "degree": "MBBS", "institution": "AIIMS Delhi", "year": 2010, "specialization": "Cardiology"
+    }})
+    id: str
+    degree: str
+    institution: str
+    year: int
+    specialization: Optional[str]
+
+
+class ExperienceOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "role": "Senior Cardiologist", "hospital_name": "Apollo Hospital",
+        "location": "Mumbai", "start_date": "2015-01-01", "end_date": None, "is_current": True
+    }})
+    id: str
+    role: str
+    hospital_name: str
+    location: Optional[str]
+    start_date: str
+    end_date: Optional[str]
+    is_current: bool
+
+
+class PhotoUploadOut(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "success": True, "file_id": "550e8400-e29b-41d4-a716-446655440000"
+    }})
+    success: bool
+    file_id: str
+
+
+# ── Helper ────────────────────────────────────────────────────
+
+def _profile_dict(dp) -> DoctorProfileOut:
+    return DoctorProfileOut(
+        id=str(dp.id),
+        user_id=str(dp.user_id),
+        first_name=dp.first_name,
+        last_name=dp.last_name,
+        full_name=dp.full_name,
+        photo_file_id=str(dp.photo_file_id) if dp.photo_file_id else None,
+        headline=dp.headline,
+        about=dp.about,
+        primary_specialization_id=str(dp.primary_specialization_id) if dp.primary_specialization_id else None,
+        clinical_interests=[str(i) for i in (dp.clinical_interests or [])],
+        professional_location=dp.professional_location or None,
+        experience_years=float(dp.experience_years),
+        open_to_opportunities=dp.open_to_opportunities,
+        verification_status=dp.verification_status,
+        is_verified=dp.is_verified,
+        created_at=dp.created_at.isoformat(),
+        updated_at=dp.updated_at.isoformat(),
+    )
+
+
+# ── Endpoints ─────────────────────────────────────────────────
+
+@router.post("/profile/", response_model=DoctorProfileOut, status_code=201, summary="Create doctor profile")
 async def create_doctor_profile(profile: DoctorProfileCreate, current_user=Depends(get_current_user)):
     from apps.doctors.models import DoctorProfile
     if current_user.user_type != 'DOCTOR':
@@ -115,12 +225,12 @@ async def create_doctor_profile(profile: DoctorProfileCreate, current_user=Depen
     return _profile_dict(dp)
 
 
-@router.get("/profile/me/")
+@router.get("/profile/me/", response_model=DoctorProfileOut, summary="Get my profile")
 async def get_my_profile(current_doctor=Depends(get_current_doctor)):
     return _profile_dict(current_doctor)
 
 
-@router.patch("/profile/me/")
+@router.patch("/profile/me/", response_model=DoctorProfileOut, summary="Update my profile")
 async def update_my_profile(update: DoctorProfileUpdate, current_doctor=Depends(get_current_doctor)):
     def _update():
         data = update.model_dump(exclude_none=True)
@@ -135,7 +245,7 @@ async def update_my_profile(update: DoctorProfileUpdate, current_doctor=Depends(
     return _profile_dict(dp)
 
 
-@router.get("/search/")
+@router.get("/search/", response_model=DoctorSearchResponse, summary="Search doctors")
 async def search_doctors(
     search: Optional[str] = Query(None),
     specialty: Optional[str] = Query(None),
@@ -168,21 +278,18 @@ async def search_doctors(
         return total, results
 
     total, results = await sync_to_async(_search, thread_sensitive=True)()
-    return {"total": total, "page": page, "page_size": page_size, "results": [_profile_dict(d) for d in results]}
+    return DoctorSearchResponse(total=total, page=page, page_size=page_size, results=[_profile_dict(d) for d in results])
 
 
-@router.get("/profile/me/registrations/")
+@router.get("/profile/me/registrations/", response_model=List[RegistrationOut], summary="List my registrations")
 async def list_registrations(current_doctor=Depends(get_current_doctor)):
-    def _list():
-        return list(current_doctor.registrations.all())
-
-    regs = await sync_to_async(_list, thread_sensitive=True)()
-    return [{"id": str(r.id), "council_id": str(r.council_id), "registration_number": r.registration_number,
-             "registration_year": r.registration_year, "is_primary": r.is_primary,
-             "verification_status": r.verification_status} for r in regs]
+    regs = await sync_to_async(lambda: list(current_doctor.registrations.all()), thread_sensitive=True)()
+    return [RegistrationOut(id=str(r.id), council_id=str(r.council_id),
+                            registration_number=r.registration_number, registration_year=r.registration_year,
+                            is_primary=r.is_primary, verification_status=r.verification_status) for r in regs]
 
 
-@router.post("/profile/me/registrations/", status_code=201)
+@router.post("/profile/me/registrations/", response_model=RegistrationCreateOut, status_code=201, summary="Add registration")
 async def add_registration(reg: DoctorRegistrationCreate, current_doctor=Depends(get_current_doctor)):
     from apps.doctors.models import DoctorRegistration
 
@@ -199,86 +306,73 @@ async def add_registration(reg: DoctorRegistrationCreate, current_doctor=Depends
         r = await sync_to_async(_create, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"id": str(r.id), "registration_number": r.registration_number, "verification_status": r.verification_status}
+    return RegistrationCreateOut(id=str(r.id), registration_number=r.registration_number, verification_status=r.verification_status)
 
 
-@router.get("/profile/me/qualifications/")
+@router.get("/profile/me/qualifications/", response_model=List[QualificationOut], summary="List qualifications")
 async def list_qualifications(current_doctor=Depends(get_current_doctor)):
-    def _list():
-        return list(current_doctor.qualifications.all())
-
-    quals = await sync_to_async(_list, thread_sensitive=True)()
-    return [{"id": str(q.id), "degree": q.degree, "institution": q.institution,
-             "year": q.year, "specialization": q.specialization} for q in quals]
+    quals = await sync_to_async(lambda: list(current_doctor.qualifications.all()), thread_sensitive=True)()
+    return [QualificationOut(id=str(q.id), degree=q.degree, institution=q.institution,
+                             year=q.year, specialization=q.specialization) for q in quals]
 
 
-@router.post("/profile/me/qualifications/", status_code=201)
+@router.post("/profile/me/qualifications/", response_model=QualificationOut, status_code=201, summary="Add qualification")
 async def add_qualification(qual: DoctorQualificationCreate, current_doctor=Depends(get_current_doctor)):
     from apps.doctors.models import DoctorQualification
 
-    def _create():
-        return DoctorQualification.objects.create(
-            doctor=current_doctor, degree=qual.degree, institution=qual.institution,
-            year=qual.year, specialization=qual.specialization,
-        )
-
-    q = await sync_to_async(_create, thread_sensitive=True)()
-    return {"id": str(q.id), "degree": q.degree, "institution": q.institution, "year": q.year}
+    q = await sync_to_async(lambda: DoctorQualification.objects.create(
+        doctor=current_doctor, degree=qual.degree, institution=qual.institution,
+        year=qual.year, specialization=qual.specialization,
+    ), thread_sensitive=True)()
+    return QualificationOut(id=str(q.id), degree=q.degree, institution=q.institution,
+                            year=q.year, specialization=q.specialization)
 
 
-@router.delete("/profile/me/qualifications/{qual_id}/", status_code=204)
+@router.delete("/profile/me/qualifications/{qual_id}/", status_code=204, summary="Delete qualification")
 async def delete_qualification(qual_id: str, current_doctor=Depends(get_current_doctor)):
     from apps.doctors.models import DoctorQualification
-
-    def _delete():
-        deleted, _ = DoctorQualification.objects.filter(id=qual_id, doctor=current_doctor).delete()
-        return deleted
-
-    deleted = await sync_to_async(_delete, thread_sensitive=True)()
+    deleted = await sync_to_async(
+        lambda: DoctorQualification.objects.filter(id=qual_id, doctor=current_doctor).delete()[0],
+        thread_sensitive=True,
+    )()
     if not deleted:
         raise HTTPException(status_code=404, detail="Qualification not found")
 
 
-@router.get("/profile/me/experiences/")
+@router.get("/profile/me/experiences/", response_model=List[ExperienceOut], summary="List experiences")
 async def list_experiences(current_doctor=Depends(get_current_doctor)):
-    def _list():
-        return list(current_doctor.experiences.order_by('-start_date'))
-
-    exps = await sync_to_async(_list, thread_sensitive=True)()
-    return [{"id": str(e.id), "role": e.role, "hospital_name": e.hospital_name,
-             "location": e.location, "start_date": str(e.start_date),
-             "end_date": str(e.end_date) if e.end_date else None, "is_current": e.is_current} for e in exps]
+    exps = await sync_to_async(lambda: list(current_doctor.experiences.order_by('-start_date')), thread_sensitive=True)()
+    return [ExperienceOut(id=str(e.id), role=e.role, hospital_name=e.hospital_name,
+                          location=e.location, start_date=str(e.start_date),
+                          end_date=str(e.end_date) if e.end_date else None, is_current=e.is_current) for e in exps]
 
 
-@router.post("/profile/me/experiences/", status_code=201)
+@router.post("/profile/me/experiences/", response_model=ExperienceOut, status_code=201, summary="Add experience")
 async def add_experience(exp: DoctorExperienceCreate, current_doctor=Depends(get_current_doctor)):
     from apps.doctors.models import DoctorExperience
 
-    def _create():
-        return DoctorExperience.objects.create(
-            doctor=current_doctor, role=exp.role, hospital_name=exp.hospital_name,
-            location=exp.location, start_date=exp.start_date, end_date=exp.end_date,
-            is_current=exp.is_current, description=exp.description,
-        )
+    e = await sync_to_async(lambda: DoctorExperience.objects.create(
+        doctor=current_doctor, role=exp.role, hospital_name=exp.hospital_name,
+        location=exp.location, start_date=exp.start_date, end_date=exp.end_date,
+        is_current=exp.is_current, description=exp.description,
+    ), thread_sensitive=True)()
+    return ExperienceOut(id=str(e.id), role=e.role, hospital_name=e.hospital_name,
+                         location=e.location, start_date=str(e.start_date),
+                         end_date=str(e.end_date) if e.end_date else None, is_current=e.is_current)
 
-    e = await sync_to_async(_create, thread_sensitive=True)()
-    return {"id": str(e.id), "role": e.role, "hospital_name": e.hospital_name, "is_current": e.is_current}
 
-
-@router.delete("/profile/me/experiences/{exp_id}/", status_code=204)
+@router.delete("/profile/me/experiences/{exp_id}/", status_code=204, summary="Delete experience")
 async def delete_experience(exp_id: str, current_doctor=Depends(get_current_doctor)):
     from apps.doctors.models import DoctorExperience
-
-    def _delete():
-        deleted, _ = DoctorExperience.objects.filter(id=exp_id, doctor=current_doctor).delete()
-        return deleted
-
-    deleted = await sync_to_async(_delete, thread_sensitive=True)()
+    deleted = await sync_to_async(
+        lambda: DoctorExperience.objects.filter(id=exp_id, doctor=current_doctor).delete()[0],
+        thread_sensitive=True,
+    )()
     if not deleted:
         raise HTTPException(status_code=404, detail="Experience not found")
 
 
-@router.get("/profile/{doctor_id}/")
+@router.get("/profile/{doctor_id}/", response_model=DoctorProfileOut, summary="Get doctor profile by ID")
 async def get_doctor_profile(doctor_id: str, current_user=Depends(get_current_user)):
     from apps.doctors.models import DoctorProfile
 
@@ -298,16 +392,15 @@ async def get_doctor_profile(doctor_id: str, current_user=Depends(get_current_us
     return _profile_dict(dp)
 
 
-@router.post("/profile/me/photo/")
+@router.post("/profile/me/photo/", response_model=PhotoUploadOut, summary="Upload profile photo")
 async def upload_photo(file: UploadFile = File(...), current_doctor=Depends(get_current_doctor)):
     from apps.core.services.storage import upload_file_to_s3
     if file.content_type not in ('image/jpeg', 'image/png', 'image/webp'):
         raise HTTPException(status_code=400, detail="Only JPEG/PNG/WEBP allowed")
     file_id = await upload_file_to_s3(file, folder="doctor-photos")
 
-    def _save():
-        current_doctor.photo_file_id = file_id
+    await sync_to_async(lambda: (
+        setattr(current_doctor, 'photo_file_id', file_id),
         current_doctor.save(update_fields=['photo_file_id'])
-
-    await sync_to_async(_save, thread_sensitive=True)()
-    return {"success": True, "file_id": str(file_id)}
+    ), thread_sensitive=True)()
+    return PhotoUploadOut(success=True, file_id=str(file_id))

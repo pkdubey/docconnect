@@ -5,7 +5,7 @@ from typing import Optional
 from asgiref.sync import sync_to_async
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 security = HTTPBearer()
@@ -25,6 +25,11 @@ class OTPVerify(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "token_type": "bearer"
+    }})
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -50,7 +55,30 @@ class RegisterRequest(BaseModel):
     email: Optional[str] = None
 
 
+class OTPSendResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "success": True, "message": "OTP sent", "expires_in": 300, "otp": None
+    }})
+    success: bool
+    message: str
+    expires_in: int
+    otp: Optional[str] = None
+
+
+class LogoutResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {"success": True, "message": "Logged out"}})
+    success: bool
+    message: str
+
+
 class RegisterResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "token_type": "bearer",
+        "user_id": "550e8400-e29b-41d4-a716-446655440000",
+        "user_type": "DOCTOR", "profile_created": True
+    }})
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -137,7 +165,7 @@ async def login_with_password(request: PasswordLoginRequest):
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
-@router.post("/send-otp/")
+@router.post("/send-otp/", response_model=OTPSendResponse)
 async def send_otp(request: OTPRequest):
     from django.utils import timezone
     from django.conf import settings
@@ -178,7 +206,7 @@ async def send_otp(request: OTPRequest):
         except Exception:
             pass
 
-    return response
+    return OTPSendResponse(**response)
 
 
 @router.post("/verify-otp/", response_model=TokenResponse)
@@ -242,7 +270,7 @@ async def refresh_token(body: RefreshRequest):
         raise HTTPException(status_code=401, detail=str(e))
 
 
-@router.post("/logout/")
+@router.post("/logout/", response_model=LogoutResponse)
 async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
     from rest_framework_simplejwt.tokens import AccessToken
     from rest_framework_simplejwt.exceptions import TokenError
@@ -255,4 +283,4 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
             pass
 
     await sync_to_async(_blacklist, thread_sensitive=True)()
-    return {"success": True, "message": "Logged out"}
+    return LogoutResponse(success=True, message="Logged out")

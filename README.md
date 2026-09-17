@@ -2,28 +2,30 @@
 
 > LinkedIn for Doctors — Verified identities, doctor-only jobs, clinical networking & locum marketplace.
 
-![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python) ![Django](https://img.shields.io/badge/Django-5.0+-green?logo=django) ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-teal?logo=fastapi) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-blue?logo=postgresql) ![Redis](https://img.shields.io/badge/Redis-7.2+-red?logo=redis) ![Docker](https://img.shields.io/badge/Docker-ready-blue?logo=docker) ![License](https://img.shields.io/badge/License-Proprietary-red)
+![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python) ![Django](https://img.shields.io/badge/Django-5.0+-green?logo=django) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-teal?logo=fastapi) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-blue?logo=postgresql) ![Redis](https://img.shields.io/badge/Redis-7.2+-red?logo=redis) ![Docker](https://img.shields.io/badge/Docker-ready-blue?logo=docker) ![License](https://img.shields.io/badge/License-Proprietary-red)
 
 ---
 
 ## Table of Contents
 1. [Project Overview](#1-project-overview)
-2. [Module 1 — Doctor Professional Network](#2-module-1--doctor-professional-network)
-3. [Module 2 — Doctor Career Marketplace](#3-module-2--doctor-career-marketplace)
-4. [Module 3 — Doctor Availability Exchange](#4-module-3--doctor-availability-exchange)
-5. [System Architecture](#5-system-architecture)
-6. [Technology Stack](#6-technology-stack)
-7. [Database Design](#7-database-design)
-8. [API Architecture (FastAPI)](#8-api-architecture-fastapi)
-9. [Project Structure](#9-project-structure)
-10. [Development Setup](#10-development-setup)
-11. [Deployment](#11-deployment)
-12. [API Documentation](#12-api-documentation)
-13. [Security](#13-security)
-14. [Testing](#14-testing)
-15. [Troubleshooting](#15-troubleshooting)
-16. [Roadmap](#16-roadmap)
-17. [Contributing](#17-contributing)
+2. [Module 1 & 2 — Doctor Professional Network](#2-module-1--doctor-professional-network)
+3. [Module 3 — Doctor Career Marketplace](#3-module-2--doctor-career-marketplace)
+4. [Module 4 — Doctor Availability Exchange](#4-module-3--doctor-availability-exchange)
+5. [Module 5 — Platform Operations (Admin CRM)](#5-module-5--platform-operations-admin-crm)
+6. [API Global Contract](#6-api-global-contract)
+7. [System Architecture](#7-system-architecture)
+8. [Technology Stack](#8-technology-stack)
+9. [Database Design](#9-database-design)
+10. [API Architecture (FastAPI)](#10-api-architecture-fastapi)
+11. [Project Structure](#11-project-structure)
+12. [Development Setup](#12-development-setup)
+13. [Deployment](#13-deployment)
+14. [API Documentation](#14-api-documentation)
+15. [Security](#15-security)
+16. [Testing](#16-testing)
+17. [Troubleshooting](#17-troubleshooting)
+18. [Roadmap](#18-roadmap)
+19. [Contributing](#19-contributing)
 
 ---
 
@@ -43,16 +45,22 @@ DocConnect is a verified professional network exclusively for doctors. It provid
 
 | Module | Description | Section |
 |--------|-------------|--------|
-| **Doctor Professional Network** | LinkedIn-style verified profiles, connections, feed, specialty communities, messaging | [Section 2](#2-module-1--doctor-professional-network) |
-| **Doctor Career Marketplace** | Hospital onboarding, job posting, one-tap apply, recruitment CRM, AI matching | [Section 3](#3-module-2--doctor-career-marketplace) |
-| **Doctor Availability Exchange** | Doctor availability, urgent shift requirements, doctor matching, shift lifecycle | [Section 4](#4-module-3--doctor-availability-exchange) |
-| **Hospital Registration** | Verified hospital/clinic onboarding, branches, departments, staff management | [Section 3.1](#31-hospital-onboarding) |
+| **Module 1 — Identity, Onboarding & Verification** | Doctor registration/verification, hospital onboarding, branches, staff roles | [Section 2](#2-module-1--doctor-professional-network) |
+| **Module 2 — Professional Network & Community** | LinkedIn-style verified profiles, connections, feed, specialty communities, messaging | [Section 2](#2-module-1--doctor-professional-network) |
+| **Module 3 — Career Marketplace & Recruitment** | Hospital job posting, one-tap apply, recruitment CRM, AI matching | [Section 3](#3-module-2--doctor-career-marketplace) |
+| **Module 4 — Availability Exchange & Workforce** | Doctor availability, urgent shift requirements, doctor matching, shift lifecycle | [Section 4](#4-module-3--doctor-availability-exchange) |
+| **Module 5 — Platform Operations** | Admin CRM, moderation, reports, support, audit, analytics, billing | [Section 12](#12-api-documentation) |
 
-### 1.3 Target Users
+### 1.3 Actors & Target Users
 
-- **Individual Doctors** - MBBS, MD/MS, DM/MCh, dentists, AYUSH practitioners
-- **Hospitals & Clinics** - Verified institutional accounts for hiring
-- **Medical Institutions & NGOs** - CME events, fellowship postings
+| Actor | Core Responsibility | Access Domain |
+|-------|--------------------|--------------|
+| **Doctor** | Professional identity, network, jobs, applications, availability, shifts, messaging | Own data + permitted public/network/career data |
+| **Hospital Admin** | Organization, branches, users, jobs, candidates, applications, urgent workforce | Own hospital/branch data + permitted doctor data |
+| **HR / Recruiter** | Recruitment workflow and candidate operations | Assigned hospital scope |
+| **Branch User** | Branch-scoped recruitment/workforce operations | Assigned branch scope |
+| **Platform Admin** | Verification, moderation, reports, restrictions, communities, jobs, support, audit | Platform-wide, privileged |
+| **Super Admin** | Platform configuration and irreversible/high-risk actions | Highest privileged scope |
 
 ### 1.4 Why Django 5.0+ with FastAPI?
 
@@ -171,6 +179,8 @@ python run.py
   UNVERIFIED ──▶ PENDING ──▶ VERIFIED
                     │
                     └──▶ REJECTED (with reason)
+                              │
+                              └──▶ RESUBMISSION (controlled resubmit)
 ```
 
 | Step | Action |
@@ -203,18 +213,20 @@ python run.py
 | Profile View | ✅ Live | View any verified doctor's profile |
 | Visibility Controls | ✅ Live | Control who sees your profile & career info |
 | Open to Opportunities | ✅ Live | Toggle availability badge visible to hospitals |
-| Feed / Posts | 🔜 Phase 2 | Clinical case sharing, articles, updates |
-| Connections | 🔜 Phase 2 | Send / accept / withdraw connection requests |
-| Endorsements | 🔜 Phase 2 | Peer skill endorsements |
+| Feed / Posts | ✅ Live | Create posts (UPDATE/CASE/ARTICLE/PHOTO), like, comment, reply |
+| Connections | ✅ Live | Send / accept / decline / withdraw connection requests |
+| Home Summary | ✅ Live | Single API — stats, urgent jobs, suggested doctors, unread counts |
+| Hospital Follow | ✅ Live | Doctors can follow hospital pages |
+| Endorsements | 🔜 Phase 3 | Peer skill endorsements |
 
 ### 2.4 Specialty Communities
 
 | Feature | Status | Description |
 |---------|--------|-------------|
 | Specialty Groups | 🔜 Phase 2 | Cardiology, Neurology, Pediatrics etc. |
-| Case Discussions | 🔜 Phase 2 | Anonymised clinical case sharing |
-| Second Opinions | 🔜 Phase 2 | Request peer review on complex cases |
-| CME Events | 🔜 Phase 2 | Continuing Medical Education tracking |
+| Case Discussions | ✅ Live | Anonymised clinical case sharing via CASE post type |
+| Second Opinions | 🔜 Phase 3 | Request peer review on complex cases |
+| CME Events | 🔜 Phase 3 | Continuing Medical Education tracking |
 
 ### 2.5 Messaging
 
@@ -233,6 +245,19 @@ Doctor A ──▶ Start Conversation ──▶ Doctor B
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| POST | `/api/v1/auth/register/` | Register with phone + password |
+| POST | `/api/v1/auth/login/` | Login with phone + password |
+| POST | `/api/v1/auth/send-otp/` | Send OTP to phone |
+| POST | `/api/v1/auth/verify-otp/` | Verify OTP and get tokens |
+| POST | `/api/v1/auth/refresh/` | Refresh JWT token |
+| POST | `/api/v1/auth/logout/` | Logout / blacklist token |
+| POST | `/api/v1/auth/password/forgot/` | Forgot password — send reset challenge |
+| POST | `/api/v1/auth/password/reset/` | Reset password with token |
+| POST | `/api/v1/auth/password/change/` | Change password (authenticated) |
+| GET | `/api/v1/auth/sessions/` | List active sessions / devices |
+| DELETE | `/api/v1/auth/sessions/{id}/` | Revoke a specific session |
+| POST | `/api/v1/auth/sessions/revoke-all/` | Revoke all sessions |
+| DELETE | `/api/v1/account/` | Deactivate / delete account |
 | POST | `/api/v1/doctors/profile/` | Create doctor profile |
 | GET | `/api/v1/doctors/profile/me/` | Get my profile |
 | PATCH | `/api/v1/doctors/profile/me/` | Update my profile |
@@ -246,11 +271,72 @@ Doctor A ──▶ Start Conversation ──▶ Doctor B
 | DELETE | `/api/v1/doctors/profile/me/qualifications/{id}/` | Delete qualification |
 | POST | `/api/v1/doctors/profile/me/experiences/` | Add experience |
 | GET | `/api/v1/doctors/profile/me/experiences/` | List experiences |
+| PATCH | `/api/v1/doctors/profile/me/experiences/{id}/` | Update experience |
 | DELETE | `/api/v1/doctors/profile/me/experiences/{id}/` | Delete experience |
+| POST | `/api/v1/doctors/profile/me/affiliations/` | Add hospital affiliation |
+| GET | `/api/v1/doctors/profile/me/affiliations/` | List affiliations |
+| PATCH | `/api/v1/doctors/profile/me/affiliations/{id}/` | Update affiliation |
+| DELETE | `/api/v1/doctors/profile/me/affiliations/{id}/` | Delete affiliation |
+| GET | `/api/v1/doctors/profile/me/verification/` | Get verification status |
+| POST | `/api/v1/doctors/profile/me/verification/submit/` | Submit verification documents |
+| POST | `/api/v1/doctors/profile/me/verification/resubmit/` | Resubmit after rejection |
+| GET | `/api/v1/doctors/profile/me/status/` | Get professional status |
+| PUT | `/api/v1/doctors/profile/me/status/` | Update professional status |
+| GET | `/api/v1/doctors/profile/me/privacy/` | Get privacy settings |
+| PUT | `/api/v1/doctors/profile/me/privacy/` | Update privacy settings |
+| POST | `/api/v1/files/upload/` | Upload file (photo/CV/credential) |
+| GET | `/api/v1/files/{id}/` | Get file metadata |
+| GET | `/api/v1/files/{id}/signed-url/` | Get expiring signed URL for file |
+| DELETE | `/api/v1/files/{id}/` | Delete file |
+| GET | `/api/v1/search/doctors/` | Search doctors (advanced filters) |
+| GET | `/api/v1/search/hospitals/` | Search hospitals |
+| GET | `/api/v1/search/jobs/` | Search jobs |
+| GET | `/api/v1/search/communities/` | Search specialty communities |
+| GET | `/api/v1/search/universal/` | Universal search (doctors/hospitals/jobs/communities) |
+| POST | `/api/v1/network/connections/request/` | Send connection request |
+| POST | `/api/v1/network/connections/{id}/accept/` | Accept connection |
+| POST | `/api/v1/network/connections/{id}/reject/` | Reject connection |
+| DELETE | `/api/v1/network/connections/{id}/` | Remove connection |
+| GET | `/api/v1/network/connections/` | List connections / requests |
+| POST | `/api/v1/network/follow/{user_id}/` | Follow a user |
+| DELETE | `/api/v1/network/follow/{user_id}/` | Unfollow a user |
+| POST | `/api/v1/network/block/{user_id}/` | Block a user |
+| DELETE | `/api/v1/network/block/{user_id}/` | Unblock a user |
+| GET | `/api/v1/network/blocked/` | List blocked users |
+| POST | `/api/v1/reports/` | Report a profile/post/comment/job/hospital |
+| GET | `/api/v1/feed/home/` | Home summary (stats, urgent jobs, suggested doctors) |
+| GET | `/api/v1/feed/` | Paginated feed posts |
+| POST | `/api/v1/feed/posts/` | Create a post (text/image/case/article) |
+| PATCH | `/api/v1/feed/posts/{id}/` | Edit own post |
+| DELETE | `/api/v1/feed/posts/{id}/` | Delete own post |
+| POST | `/api/v1/feed/posts/{id}/like/` | Like / unlike a post |
+| GET | `/api/v1/feed/posts/{id}/comments/` | Get comments for a post |
+| POST | `/api/v1/feed/posts/{id}/comments/` | Add a comment |
+| PATCH | `/api/v1/feed/comments/{id}/` | Edit own comment / reply |
+| DELETE | `/api/v1/feed/comments/{id}/` | Delete own comment / reply |
+| POST | `/api/v1/feed/comments/{id}/reply/` | Reply to a comment |
+| GET | `/api/v1/communities/` | List specialty communities |
+| GET | `/api/v1/communities/{id}/` | Community detail |
+| POST | `/api/v1/communities/{id}/join/` | Join community |
+| DELETE | `/api/v1/communities/{id}/leave/` | Leave community |
+| GET | `/api/v1/communities/{id}/posts/` | Community posts |
+| POST | `/api/v1/communities/{id}/posts/` | Post in community |
 | POST | `/api/v1/messages/conversations/` | Start a conversation |
 | GET | `/api/v1/messages/conversations/` | List my conversations |
 | GET | `/api/v1/messages/conversations/{id}/messages/` | Get messages |
 | POST | `/api/v1/messages/conversations/{id}/messages/` | Send a message |
+| POST | `/api/v1/messages/conversations/{id}/read/` | Mark conversation as read |
+| POST | `/api/v1/messages/conversations/{id}/report/` | Report conversation |
+| POST | `/api/v1/messages/conversations/{id}/block/` | Block conversation |
+| DELETE | `/api/v1/messages/conversations/{id}/block/` | Unblock conversation |
+| POST | `/api/v1/devices/` | Register device for push notifications |
+| DELETE | `/api/v1/devices/{id}/` | Revoke device token |
+| GET | `/api/v1/notifications/` | List notifications (paginated) |
+| GET | `/api/v1/notifications/unread-count/` | Get unread notification count |
+| PATCH | `/api/v1/notifications/{id}/read/` | Mark notification as read |
+| POST | `/api/v1/notifications/read-all/` | Mark all notifications as read |
+| GET | `/api/v1/notification-preferences/` | Get per-event notification preferences |
+| PUT | `/api/v1/notification-preferences/` | Update notification preferences |
 
 ---
 
@@ -329,22 +415,29 @@ Every status change is logged in `ApplicationHistory` with:
 - `changed_by` (user who made the change)
 - `notes` (optional reason)
 
-### 3.4 AI Matching (Phase 2)
+### 3.4 AI Matching
+
+> **Important:** Per the V2 specification, matching weights are NOT hardcoded. They are product-approved configuration values stored in `matching_configs` table. The factors below are the V1 matching inputs — weights must be approved before production use.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    AI MATCHING ENGINE                       │
+│                    MATCHING ENGINE                       │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  Job Requirements          Doctor Profile                   │
-│  ┌──────────────┐          ┌──────────────┐                │
-│  │ specialty_id │◄────────►│ primary_spec │  40%           │
-│  │ experience   │◄────────►│ exp_years    │  25%           │
-│  │ location     │◄────────►│ prof_location│  20%           │
-│  │ qual_ids     │◄────────►│ qualifications│ 15%           │
-│  └──────────────┘          └──────────────┘                │
+│  V1 Matching Factors (weights = configurable):            │
+│  • verification status                                    │
+│  • specialization match                                   │
+│  • qualification match                                    │
+│  • experience (years)                                     │
+│  • date availability                                      │
+│  • time availability                                      │
+│  • location / distance                                    │
+│  • preferred radius                                       │
+│  • job type preference                                    │
+│  • professional status                                    │
 │                                                             │
-│  Output: match_score (0–100) returned in job listing API   │
+│  Output: match_score + score_components[] + reasons[]     │
+│  Config: versioned via matching_configs table             │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -355,21 +448,49 @@ Every status change is logged in `ApplicationHistory` with:
 |--------|----------|-------------|
 | POST | `/api/v1/hospitals/register/` | Register new hospital |
 | GET | `/api/v1/hospitals/me/` | Get my hospital profile |
+| PATCH | `/api/v1/hospitals/me/` | Update hospital profile |
+| POST | `/api/v1/hospitals/me/verification/submit/` | Submit hospital verification documents |
+| GET | `/api/v1/hospitals/me/verification/` | Get hospital verification status |
 | POST | `/api/v1/hospitals/me/branches/` | Add hospital branch |
 | GET | `/api/v1/hospitals/me/branches/` | List branches |
+| PATCH | `/api/v1/hospitals/me/branches/{id}/` | Update branch |
+| DELETE | `/api/v1/hospitals/me/branches/{id}/` | Deactivate branch |
 | POST | `/api/v1/hospitals/me/departments/` | Add department |
 | GET | `/api/v1/hospitals/me/departments/` | List departments |
+| POST | `/api/v1/hospitals/me/users/` | Add hospital user (HR/Recruiter/Branch User) |
+| GET | `/api/v1/hospitals/me/users/` | List hospital users |
+| PATCH | `/api/v1/hospitals/me/users/{id}/` | Update user role/branch/status |
+| DELETE | `/api/v1/hospitals/me/users/{id}/` | Revoke user membership |
 | POST | `/api/v1/hospitals/me/invite-user/` | Invite HR / Recruiter |
 | GET | `/api/v1/hospitals/me/staff/` | List hospital staff |
 | POST | `/api/v1/hospitals/me/upload-logo/` | Upload hospital logo |
-| POST | `/api/v1/jobs/` | Create job posting |
-| GET | `/api/v1/jobs/` | List jobs (with filters) |
+| GET | `/api/v1/hospitals/{id}/` | View public hospital profile |
+| POST | `/api/v1/jobs/` | Create job posting (auto-published) |
+| PATCH | `/api/v1/jobs/{id}/` | Update job posting |
+| POST | `/api/v1/jobs/{id}/publish/` | Publish a draft job |
+| POST | `/api/v1/jobs/{id}/close/` | Close a job posting |
+| GET | `/api/v1/jobs/` | List jobs (specialty/city/type/search/urgent filters) |
 | GET | `/api/v1/jobs/{id}/` | Get job details |
+| POST | `/api/v1/jobs/{id}/save/` | Save a job |
+| DELETE | `/api/v1/jobs/{id}/save/` | Unsave a job |
+| GET | `/api/v1/doctors/me/saved-jobs/` | List saved jobs |
+| GET | `/api/v1/jobs/my-applications/` | Doctor's applications (with status filter) |
 | POST | `/api/v1/jobs/{id}/apply/` | One-tap apply |
 | POST | `/api/v1/jobs/{id}/withdraw/` | Withdraw application |
-| GET | `/api/v1/jobs/my-applications/` | Doctor's applications |
 | GET | `/api/v1/jobs/{id}/applications/` | Hospital — view applicants |
-| PATCH | `/api/v1/jobs/applications/{id}/status/` | Update application status |
+| PATCH | `/api/v1/jobs/applications/{id}/status/` | Update application status (logs history) |
+| POST | `/api/v1/applications/{id}/notes/` | Add internal note to application |
+| GET | `/api/v1/applications/{id}/notes/` | List application notes |
+| POST | `/api/v1/applications/{id}/interview/` | Schedule interview |
+| PATCH | `/api/v1/applications/{id}/interview/{interview_id}/` | Update interview outcome |
+| POST | `/api/v1/applications/{id}/offer/` | Send offer |
+| POST | `/api/v1/applications/{id}/invite/` | Invite doctor to apply |
+| GET | `/api/v1/jobs/{id}/matches/` | Get matched doctors for a job |
+| GET | `/api/v1/doctors/me/job-recommendations/` | Get recommended jobs for doctor |
+| GET | `/api/v1/masters/specialties/` | List specialties |
+| GET | `/api/v1/masters/qualifications/` | List qualifications |
+| GET | `/api/v1/masters/job-types/` | List job types |
+| GET | `/api/v1/masters/shift-types/` | List shift types |
 
 ---
 
@@ -512,23 +633,193 @@ Every status change is logged in `ApplicationHistory` with:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/availability/` | Doctor posts availability |
+| POST | `/api/v1/availability/` | Doctor posts availability (with slots) |
 | GET | `/api/v1/availability/me/` | List my availabilities |
+| PATCH | `/api/v1/availability/{id}/` | Update availability |
 | DELETE | `/api/v1/availability/{id}/` | Deactivate availability |
 | GET | `/api/v1/availability/{id}/slots/` | List slots for an availability |
+| POST | `/api/v1/availability/{id}/slots/` | Add slot to availability |
+| PATCH | `/api/v1/availability/slots/{slot_id}/` | Update a slot |
+| DELETE | `/api/v1/availability/slots/{slot_id}/` | Delete a slot |
+| GET | `/api/v1/availability/preferences/` | Get availability preferences |
+| PUT | `/api/v1/availability/preferences/` | Update availability preferences |
 | POST | `/api/v1/shifts/requirements/` | Hospital posts shift requirement |
-| GET | `/api/v1/shifts/requirements/` | List open shift requirements |
+| GET | `/api/v1/shifts/requirements/` | List open shift requirements (urgency/city/specialty filters) |
+| PATCH | `/api/v1/shifts/requirements/{id}/` | Update shift requirement |
 | GET | `/api/v1/shifts/requirements/mine/` | Hospital's own requirements |
+| POST | `/api/v1/shifts/requirements/{id}/match/` | Get matched doctors for a requirement |
+| GET | `/api/v1/shifts/requirements/{id}/matched-doctors/` | Get matched doctors for a requirement |
 | POST | `/api/v1/shifts/requirements/{id}/request/` | Doctor requests a shift |
 | PATCH | `/api/v1/shifts/requests/{id}/respond/` | Doctor accepts / declines |
 | PATCH | `/api/v1/shifts/requests/{id}/confirm/` | Hospital confirms shift |
+| PATCH | `/api/v1/shifts/requests/{id}/complete/` | Hospital marks shift completed |
+| PATCH | `/api/v1/shifts/requests/{id}/cancel/` | Cancel shift request (either party) |
+| GET | `/api/v1/shifts/requests/{id}/history/` | Shift request state history |
 | GET | `/api/v1/shifts/requests/mine/` | Doctor's shift requests |
 
 ---
 
-## 5. System Architecture
+## 5. Module 5 — Platform Operations (Admin CRM)
 
-### 2.1 High-Level Architecture
+> Admin CRM for verification, moderation, reports, restrictions, support, audit & analytics.
+
+### 5.1 Admin Capabilities
+
+| Feature | Description |
+|---------|-------------|
+| Verification Queue | Review doctor & hospital verification submissions |
+| User Management | Restrict, suspend, restore, deactivate users |
+| Content Moderation | Hide/remove/restore posts, jobs, comments |
+| Reports Queue | Review and action user-submitted reports |
+| Community Management | Create/archive specialty communities |
+| Audit Logs | Immutable log of all privileged actions |
+| Support Tickets | Manage user support requests |
+| Analytics Dashboard | Operational metrics — doctors, hospitals, jobs, applications |
+| Billing Management | Manage hospital subscriptions, refunds (feature-flagged) |
+
+### 5.2 Moderation Reason Codes
+
+- `PATIENT_PRIVACY_CONCERN`
+- `POTENTIAL_MEDICAL_MISINFORMATION`
+- `SPAM`
+- `HARASSMENT`
+- `COPYRIGHT_CONCERN`
+- `FAKE_DOCTOR_FALSE_CREDENTIALS`
+- `PROFESSIONAL_MISCONDUCT_CONCERN`
+- `OTHER_POLICY_VIOLATION`
+
+### 5.3 Report Lifecycle
+
+```
+  SUBMITTED ──▶ UNDER_REVIEW ──▶ ACTIONED
+                    │
+                    ├──▶ DISMISSED
+                    └──▶ ESCALATED
+```
+
+### 5.4 Notification Event Matrix
+
+| Event Code | Trigger | Recipients | Default Channels |
+|------------|---------|------------|------------------|
+| `CONNECTION_REQUEST` | New connection request | Target doctor | In-app + push |
+| `CONNECTION_ACCEPTED` | Request accepted | Requester | In-app + push |
+| `POST_INTERACTION` | Comment/reaction | Post owner | In-app + push |
+| `NEW_MESSAGE` | New message | Recipient | In-app + push |
+| `RECOMMENDED_JOB` | New/relevant job | Doctor | In-app + push |
+| `APPLICATION_UPDATE` | Application status changes | Doctor | In-app + push |
+| `INTERVIEW_UPDATE` | Interview created/updated | Doctor + HR | In-app + push |
+| `SHIFT_REQUEST` | Hospital sends shift request | Doctor | In-app + push |
+| `SHIFT_ACCEPTED` | Doctor accepts | Hospital/HR | In-app + push |
+| `SHIFT_CONFIRMED` | Hospital confirms | Doctor | In-app + push |
+| `SHIFT_CANCELLED` | Shift cancelled | Affected parties | In-app + push |
+| `VERIFICATION_UPDATE` | Verification status changes | Account owner | In-app + push |
+| `REPORT_UPDATE` | Report resolution | Reporter (policy-based) | In-app |
+| `SUPPORT_UPDATE` | Support ticket response | Ticket requester | In-app + push/email |
+
+### 5.5 API Endpoints — Admin CRM
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/admin/dashboard/` | Platform overview metrics |
+| GET | `/api/v1/admin/doctors/verification-queue/` | Doctor verification queue |
+| GET | `/api/v1/admin/doctors/verification-cases/{id}/` | Verification case detail |
+| POST | `/api/v1/admin/doctors/verification-cases/{id}/approve/` | Approve doctor verification |
+| POST | `/api/v1/admin/doctors/verification-cases/{id}/reject/` | Reject doctor verification |
+| POST | `/api/v1/admin/doctors/verification-cases/{id}/resubmit/` | Allow resubmission |
+| GET | `/api/v1/admin/hospitals/verification-queue/` | Hospital verification queue |
+| POST | `/api/v1/admin/hospitals/verification-cases/{id}/approve/` | Approve hospital verification |
+| POST | `/api/v1/admin/hospitals/verification-cases/{id}/reject/` | Reject hospital verification |
+| GET | `/api/v1/admin/users/` | List all users |
+| POST | `/api/v1/admin/users/{id}/restrict/` | Restrict user |
+| POST | `/api/v1/admin/users/{id}/suspend/` | Suspend user |
+| POST | `/api/v1/admin/users/{id}/restore/` | Restore user |
+| POST | `/api/v1/admin/users/{id}/deactivate/` | Deactivate user |
+| GET | `/api/v1/admin/reports/` | Reports queue |
+| GET | `/api/v1/admin/reports/{id}/` | Report detail |
+| POST | `/api/v1/admin/reports/{id}/action/` | Action a report |
+| POST | `/api/v1/admin/reports/{id}/dismiss/` | Dismiss a report |
+| POST | `/api/v1/admin/reports/{id}/escalate/` | Escalate a report |
+| POST | `/api/v1/admin/posts/{id}/moderate/` | Moderate a post |
+| POST | `/api/v1/admin/jobs/{id}/moderate/` | Moderate a job |
+| POST | `/api/v1/admin/communities/` | Create specialty community |
+| PATCH | `/api/v1/admin/communities/{id}/` | Update community |
+| POST | `/api/v1/admin/communities/{id}/archive/` | Archive community |
+| GET | `/api/v1/admin/audit-logs/` | Audit log records |
+| GET | `/api/v1/admin/analytics/overview/` | Analytics overview |
+| POST | `/api/v1/support/tickets/` | Create support ticket |
+| GET | `/api/v1/support/tickets/` | List my support tickets |
+| GET | `/api/v1/support/tickets/{id}/` | Ticket detail + messages |
+| POST | `/api/v1/support/tickets/{id}/messages/` | Add message to ticket |
+| PATCH | `/api/v1/admin/support/tickets/{id}/` | Update ticket status (admin) |
+| POST | `/api/v1/admin/support/tickets/{id}/resolve/` | Resolve ticket |
+| GET | `/api/v1/billing/plans/` | List billing plans |
+| GET | `/api/v1/billing/subscription/` | Current hospital subscription |
+| POST | `/api/v1/billing/subscription/` | Subscribe to a plan |
+| PATCH | `/api/v1/billing/subscription/` | Update/cancel subscription |
+| GET | `/api/v1/billing/invoices/` | List invoices |
+| GET | `/api/v1/billing/invoices/{id}/` | Invoice detail |
+| POST | `/api/v1/billing/webhooks/{provider}/` | Payment webhook (idempotent) |
+| POST | `/api/v1/admin/billing/refunds/` | Issue refund |
+
+---
+
+## 6. API Global Contract
+
+### 6.1 Standard Response Envelopes
+
+```json
+// Success (single object)
+{"success": true, "data": {...}, "message": "..."}
+
+// Success (list)
+{"success": true, "data": [...], "meta": {"page": 1, "page_size": 20, "total": 125, "has_next": true}}
+
+// Error
+{"success": false, "error": {"code": "ERR_CODE", "message": "Human-readable message", "fields": {"field": "reason"}}}
+```
+
+### 6.2 Standard Error Codes
+
+| Code | Meaning | HTTP |
+|------|---------|------|
+| `AUTH_REQUIRED` | Access token missing/invalid | 401 |
+| `AUTH_FORBIDDEN` | Role/object permission denied | 403 |
+| `TOKEN_EXPIRED` | Access token expired | 401 |
+| `SESSION_REVOKED` | Refresh/session revoked | 401 |
+| `VALIDATION_ERROR` | Request field validation failed | 400 |
+| `OTP_INVALID` | OTP invalid/expired | 400 |
+| `RESOURCE_NOT_FOUND` | Resource does not exist or is not visible | 404 |
+| `DUPLICATE_RESOURCE` | Unique relationship/resource already exists | 409 |
+| `INVALID_STATE_TRANSITION` | Requested state change not allowed | 409 |
+| `VERIFICATION_REQUIRED` | Action requires verified account | 403 |
+| `PRIVACY_RESTRICTED` | Resource/field not visible to requester | 403/404 |
+| `BLOCKED_RELATIONSHIP` | Blocked user relationship prevents action | 403 |
+| `SHIFT_CONFLICT` | Accepted/confirmed shift overlaps existing commitment | 409 |
+| `APPLICATION_CLOSED` | Job no longer accepts applications | 409 |
+| `UPLOAD_INVALID` | File type/size/security validation failed | 400 |
+| `FILE_ACCESS_DENIED` | Private file access denied | 403 |
+| `RATE_LIMITED` | Too many requests | 429 |
+| `IDEMPOTENCY_CONFLICT` | Same key used for incompatible request | 409 |
+| `MODERATION_REQUIRED` | Content held for moderation | 202 |
+| `SERVER_ERROR` | Unexpected server error | 500 |
+
+### 6.3 Privacy Matrix
+
+| Data | Public/Everyone | Doctors Only | Connections Only | Verified Hospitals |
+|------|----------------|--------------|-----------------|-------------------|
+| Name / photo / headline | Per profile visibility | Per setting | Per setting | Per setting |
+| Phone / personal email | Never public | Controlled | Controlled | Controlled; not public |
+| Medical registration details | Not exposed by default | Privacy-controlled | Privacy-controlled | Permitted professional fields only |
+| Career opportunity status | Only if career visibility permits | If permitted | If permitted | Primary audience |
+| Detailed availability | Not public | Generally restricted | Generally restricted | Primarily verified institutions |
+| Min compensation | Never public | Never public | Never public | Private to doctor |
+| Credential documents | Never public | Never public | Never public | Authorized access via signed URL only |
+
+---
+
+## 7. System Architecture
+
+### 7.1 High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -593,7 +884,7 @@ Every status change is logged in `ApplicationHistory` with:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 Data Flow Diagram
+### 7.2 Data Flow Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -629,21 +920,23 @@ Every status change is logged in `ApplicationHistory` with:
 
 ---
 
-## 6. Technology Stack
+## 8. Technology Stack
 
-### 3.1 Core Technologies
+### 8.1 Core Technologies
 
 | Component | Technology | Version | Purpose |
 |-----------|------------|---------|---------|
-| **Backend Core** | Django | 5.0+ | ORM, Admin, Models, Auth |
-| **API Layer** | FastAPI | 0.104+ | High-performance REST API |
+| **Backend Core** | Django | 5.0.6 | ORM, Admin, Models, Auth |
+| **API Layer** | FastAPI | 0.115+ | High-performance REST API |
 | **Database** | PostgreSQL | 16+ | Primary database with advanced features |
 | **Cache/Broker** | Redis | 7.2+ | Caching and Celery broker |
-| **Task Queue** | Celery | 5.3+ | Background task processing |
+| **Task Queue** | Celery | 5.4+ | Background task processing |
 | **API Docs** | FastAPI Swagger | - | Automatic OpenAPI documentation |
-| **Validation** | Pydantic | 2.4+ | Data validation and serialization |
+| **Validation** | Pydantic | 2.13+ | Data validation and serialization |
+| **Auth** | SimpleJWT | 5.3+ | JWT access + refresh tokens |
+| **WSGI Bridge** | a2wsgi | 1.10+ | Mount Django under FastAPI |
 
-### 3.2 Frontend Technologies
+### 8.2 Frontend Technologies
 
 | Component | Technology | Version | Purpose |
 |-----------|------------|---------|---------|
@@ -652,7 +945,7 @@ Every status change is logged in `ApplicationHistory` with:
 | **State Management** | Zustand/Redux | - | Client state management |
 | **API Client** | React Query | - | Data fetching and caching |
 
-### 3.3 DevOps & Infrastructure
+### 8.3 DevOps & Infrastructure
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
@@ -663,7 +956,7 @@ Every status change is logged in `ApplicationHistory` with:
 | **Monitoring** | Sentry / Prometheus | Error tracking |
 | **Logging** | ELK Stack | Log aggregation |
 
-### 3.4 PostgreSQL Extensions
+### 8.4 PostgreSQL Extensions
 
 ```sql
 -- Required PostgreSQL extensions
@@ -677,9 +970,11 @@ CREATE EXTENSION IF NOT EXISTS unaccent;     -- Unaccent text
 
 ---
 
-## 7. Database Design
+## 9. Database Design
 
-### 4.1 Complete Database Schema
+### 9.1 Complete Database Schema
+
+> The schema below reflects the actual Django models. Additional fields `photo_base64`, `cover_base64` (DoctorProfile) and `logo_base64` (Hospital) are stored as base64 text for dev convenience alongside S3 file IDs.
 
 ```sql
 -- ============================================================
@@ -1116,9 +1411,9 @@ CREATE TRIGGER user_search_vector_update
 
 ---
 
-## 8. API Architecture (FastAPI)
+## 10. API Architecture (FastAPI)
 
-### 5.1 FastAPI Integration with Django
+### 10.1 FastAPI Integration with Django
 
 ```python
 # fastapi_app/main.py
@@ -2088,7 +2383,7 @@ async def health_check():
     }
 ```
 
-### 5.2 Running FastAPI with Django
+### 10.2 Running FastAPI with Django
 
 ```python
 # run.py - Combined server runner
@@ -2112,18 +2407,17 @@ if __name__ == "__main__":
 
 ---
 
-## 9. Project Structure
+## 11. Project Structure
 
 ```
 docconnect/
 ├── manage.py
-├── run.py                     # FastAPI + Django runner
+├── run.py                     # FastAPI + Django combined runner
 ├── requirements.txt
 ├── .env
 ├── .env.example
 ├── docker-compose.yml
 ├── Dockerfile
-├── Dockerfile.fastapi
 ├── README.md
 │
 ├── docconnect_backend/        # Django Project
@@ -2135,87 +2429,71 @@ docconnect/
 │   │   ├── production.py
 │   │   └── test.py
 │   ├── urls.py
+│   ├── celery.py
 │   ├── wsgi.py
 │   └── asgi.py
 │
 ├── fastapi_app/               # FastAPI Application
 │   ├── __init__.py
-│   ├── main.py                # Main FastAPI app
-│   ├── dependencies.py        # Dependency injections
-│   ├── schemas.py             # Pydantic models
+│   ├── main.py                # Main FastAPI app + Django mount
+│   ├── dependencies.py        # get_current_user / get_current_doctor
+│   ├── schemas.py             # Shared Pydantic models
 │   ├── routers/               # API routers
 │   │   ├── __init__.py
-│   │   ├── auth.py
-│   │   ├── doctors.py
-│   │   ├── jobs.py
-│   │   ├── availability.py
-│   │   ├── shifts.py
-│   │   └── messaging.py
-│   └── middleware/            # FastAPI middleware
+│   │   ├── auth.py            # Register, Login, OTP, Refresh, Logout
+│   │   ├── doctors.py         # Profile, Search, Qualifications, Experience
+│   │   ├── feed.py            # Home, Posts, Likes, Comments, Replies
+│   │   ├── hospitals.py       # Register, Branches, Departments, Staff
+│   │   ├── jobs.py            # Post, Apply, Withdraw, CRM pipeline
+│   │   ├── availability.py    # Doctor availability + slots
+│   │   ├── shifts.py          # Requirements, Requests, Lifecycle
+│   │   ├── messaging.py       # Conversations + Messages
+│   │   └── notifications.py   # List, Read, Unread count
+│   └── middleware/
 │       ├── __init__.py
 │       ├── auth.py
 │       └── logging.py
 │
 ├── apps/                      # Django Apps
-│   ├── __init__.py
-│   ├── accounts/
-│   │   ├── __init__.py
-│   │   ├── admin.py
-│   │   ├── apps.py
-│   │   ├── models.py
-│   │   └── managers.py
-│   ├── doctors/
-│   │   ├── __init__.py
-│   │   ├── admin.py
-│   │   ├── apps.py
-│   │   ├── models.py
-│   │   └── managers.py
-│   ├── hospitals/
-│   │   ├── __init__.py
-│   │   ├── admin.py
-│   │   ├── apps.py
-│   │   └── models.py      # Hospital, HospitalBranch, HospitalDepartment, HospitalUser
-│   ├── jobs/
-│   ├── availability/
-│   ├── shifts/
-│   ├── messaging/
-│   ├── notifications/
-│   └── core/
+│   ├── accounts/              # User, OTPChallenge, RefreshSession
+│   ├── doctors/               # DoctorProfile, Connection, Post, PostLike, PostComment
+│   ├── hospitals/             # Hospital, Branch, Department, HospitalUser, HospitalFollow
+│   ├── jobs/                  # JobPost, JobApplication, ApplicationHistory
+│   ├── availability/          # DoctorAvailability, AvailabilitySlot
+│   ├── shifts/                # ShiftRequirement, ShiftRequest
+│   ├── messaging/             # Conversation, ConversationParticipant, Message
+│   ├── notifications/         # Notification
+│   └── core/                  # Encryption, SMS, S3 storage services
 │
-├── tests/                     # Tests
-│   ├── __init__.py
+├── tests/
 │   ├── conftest.py
 │   ├── test_auth.py
 │   ├── test_doctors.py
 │   ├── test_jobs.py
 │   └── test_availability.py
 │
-├── scripts/                   # Utility scripts
+├── scripts/
 │   ├── seed_data.py
 │   ├── create_admin.py
 │   └── update_search_vectors.py
 │
-├── nginx/                     # Nginx configuration
-│   ├── nginx.conf
-│   └── ssl/
-│
-└── docs/                      # Documentation
-    ├── api/
-    ├── architecture/
-    └── deployment/
+├── templates/                 # Django HTML templates (web UI)
+├── nginx/
+│   └── nginx.conf
+└── docs/
 ```
 
 ---
 
-## 10. Development Setup
+## 12. Development Setup
 
-### 7.1 Prerequisites
+### 12.1 Prerequisites
 
-- Python 3.13+ (3.14 also works — tested)
+- Python 3.11+ (3.13 / 3.14 also tested on Windows)
 - PostgreSQL 16+
 - Redis 7.2+
 
-### 7.2 Installation Steps
+### 12.2 Installation Steps
 
 ```bash
 # 1. Clone repository
@@ -2259,7 +2537,7 @@ python run.py
 celery -A docconnect_backend worker -l info
 ```
 
-### 7.3 All URLs
+### 12.3 All URLs
 
 | URL | Description |
 |-----|-------------|
@@ -2270,7 +2548,7 @@ celery -A docconnect_backend worker -l info
 | http://localhost:8000/health | Health check |
 | http://localhost:8000/admin/ | Django Admin panel |
 
-### 7.4 Super Admin Credentials
+### 12.4 Super Admin Credentials
 
 | Field | Value |
 |-------|-------|
@@ -2280,7 +2558,7 @@ celery -A docconnect_backend worker -l info
 
 > **Note:** Change password immediately in production via Django Admin → Users.
 
-### 7.5 Python 3.14 Compatibility Notes
+### 12.5 Python 3.14 Compatibility Notes
 
 If you are on Python 3.14 (Windows), the following pinned versions are required in `requirements.txt` — they ship pre-built wheels for 3.14:
 
@@ -2292,7 +2570,7 @@ fastapi==0.115.12
 uvicorn[standard]==0.34.3
 ```
 
-### 7.3 Docker Setup
+### 12.6 Docker Setup
 
 ```bash
 # Build and run with Docker Compose
@@ -2310,9 +2588,9 @@ docker-compose logs -f
 
 ---
 
-## 11. Deployment
+## 13. Deployment
 
-### 8.1 Environment Variables
+### 13.1 Environment Variables
 
 ```bash
 # .env.example
@@ -2372,7 +2650,7 @@ NMC_API_BASE_URL=https://api.nmc.org.in
 NMC_API_KEY=<nmc-api-key>
 ```
 
-### 8.2 Production Deployment
+### 13.2 Production Deployment
 
 ```bash
 # Build production Docker images
@@ -2396,54 +2674,241 @@ docker-compose -f docker-compose.production.yml exec backend python manage.py co
 
 ---
 
-## 12. API Documentation
+## 14. API Documentation
 
-### 9.1 Access Swagger UI
+### 14.1 Access Swagger UI
 
 - **Swagger UI**: `http://localhost:8000/api/docs`
 - **ReDoc**: `http://localhost:8000/api/redoc`
 - **OpenAPI JSON**: `http://localhost:8000/api/openapi.json`
 
-### 9.2 API Endpoints
+### 14.2 Complete API Reference
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| **Auth** | | |
+| **Authentication** | | |
+| POST | `/api/v1/auth/register/` | Register with phone + password |
+| POST | `/api/v1/auth/login/` | Login with phone + password |
 | POST | `/api/v1/auth/send-otp/` | Send OTP to phone |
-| POST | `/api/v1/auth/verify-otp/` | Verify OTP and login |
+| POST | `/api/v1/auth/verify-otp/` | Verify OTP and get tokens |
 | POST | `/api/v1/auth/refresh/` | Refresh JWT token |
+| POST | `/api/v1/auth/logout/` | Logout / blacklist token |
+| POST | `/api/v1/auth/password/forgot/` | Forgot password — send reset challenge |
+| POST | `/api/v1/auth/password/reset/` | Reset password with token |
+| POST | `/api/v1/auth/password/change/` | Change password (authenticated) |
+| GET | `/api/v1/auth/sessions/` | List active sessions / devices |
+| DELETE | `/api/v1/auth/sessions/{id}/` | Revoke a specific session |
+| POST | `/api/v1/auth/sessions/revoke-all/` | Revoke all sessions |
+| DELETE | `/api/v1/account/` | Deactivate / delete account |
 | **Doctors** | | |
 | POST | `/api/v1/doctors/profile/` | Create doctor profile |
 | GET | `/api/v1/doctors/profile/me/` | Get my profile |
-| PUT | `/api/v1/doctors/profile/me/` | Update my profile |
+| PATCH | `/api/v1/doctors/profile/me/` | Update my profile |
+| GET | `/api/v1/doctors/profile/{id}/` | View any doctor's profile |
+| POST | `/api/v1/doctors/profile/me/photo/` | Upload profile photo |
 | GET | `/api/v1/doctors/search/` | Search doctors |
-| **Jobs** | | |
-| POST | `/api/v1/jobs/` | Create job posting |
-| GET | `/api/v1/jobs/` | List jobs |
-| GET | `/api/v1/jobs/{id}/` | Get job details |
-| POST | `/api/v1/jobs/{id}/apply/` | Apply to job |
+| POST | `/api/v1/doctors/profile/me/registrations/` | Add NMC registration |
+| GET | `/api/v1/doctors/profile/me/registrations/` | List registrations |
+| POST | `/api/v1/doctors/profile/me/qualifications/` | Add qualification |
+| GET | `/api/v1/doctors/profile/me/qualifications/` | List qualifications |
+| DELETE | `/api/v1/doctors/profile/me/qualifications/{id}/` | Delete qualification |
+| POST | `/api/v1/doctors/profile/me/experiences/` | Add experience |
+| GET | `/api/v1/doctors/profile/me/experiences/` | List experiences |
+| PATCH | `/api/v1/doctors/profile/me/experiences/{id}/` | Update experience |
+| DELETE | `/api/v1/doctors/profile/me/experiences/{id}/` | Delete experience |
+| POST | `/api/v1/doctors/profile/me/affiliations/` | Add hospital affiliation |
+| GET | `/api/v1/doctors/profile/me/affiliations/` | List affiliations |
+| PATCH | `/api/v1/doctors/profile/me/affiliations/{id}/` | Update affiliation |
+| DELETE | `/api/v1/doctors/profile/me/affiliations/{id}/` | Delete affiliation |
+| GET | `/api/v1/doctors/profile/me/verification/` | Get verification status |
+| POST | `/api/v1/doctors/profile/me/verification/submit/` | Submit verification documents |
+| POST | `/api/v1/doctors/profile/me/verification/resubmit/` | Resubmit after rejection |
+| GET | `/api/v1/doctors/profile/me/status/` | Get professional status |
+| PUT | `/api/v1/doctors/profile/me/status/` | Update professional status |
+| GET | `/api/v1/doctors/profile/me/privacy/` | Get privacy settings |
+| PUT | `/api/v1/doctors/profile/me/privacy/` | Update privacy settings |
+| **Files** | | |
+| POST | `/api/v1/files/upload/` | Upload file (photo/CV/credential) |
+| GET | `/api/v1/files/{id}/` | Get file metadata |
+| GET | `/api/v1/files/{id}/signed-url/` | Get expiring signed URL for file |
+| DELETE | `/api/v1/files/{id}/` | Delete file |
+| **Search** | | |
+| GET | `/api/v1/search/doctors/` | Search doctors (advanced filters) |
+| GET | `/api/v1/search/hospitals/` | Search hospitals |
+| GET | `/api/v1/search/jobs/` | Search jobs |
+| GET | `/api/v1/search/communities/` | Search specialty communities |
+| GET | `/api/v1/search/universal/` | Universal search (doctors/hospitals/jobs/communities) |
+| **Network** | | |
+| POST | `/api/v1/network/connections/request/` | Send connection request |
+| POST | `/api/v1/network/connections/{id}/accept/` | Accept connection |
+| POST | `/api/v1/network/connections/{id}/reject/` | Reject connection |
+| DELETE | `/api/v1/network/connections/{id}/` | Remove connection |
+| GET | `/api/v1/network/connections/` | List connections / requests |
+| POST | `/api/v1/network/follow/{user_id}/` | Follow a user |
+| DELETE | `/api/v1/network/follow/{user_id}/` | Unfollow a user |
+| POST | `/api/v1/network/block/{user_id}/` | Block a user |
+| DELETE | `/api/v1/network/block/{user_id}/` | Unblock a user |
+| GET | `/api/v1/network/blocked/` | List blocked users |
+| POST | `/api/v1/reports/` | Report a profile/post/comment/job/hospital |
+| **Feed & Posts** | | |
+| GET | `/api/v1/feed/home/` | Home summary |
+| GET | `/api/v1/feed/` | Paginated feed posts |
+| POST | `/api/v1/feed/posts/` | Create post |
+| PATCH | `/api/v1/feed/posts/{id}/` | Edit own post |
+| DELETE | `/api/v1/feed/posts/{id}/` | Delete own post |
+| POST | `/api/v1/feed/posts/{id}/like/` | Like / unlike a post |
+| GET | `/api/v1/feed/posts/{id}/comments/` | Get comments |
+| POST | `/api/v1/feed/posts/{id}/comments/` | Add comment |
+| PATCH | `/api/v1/feed/comments/{id}/` | Edit comment / reply |
+| DELETE | `/api/v1/feed/comments/{id}/` | Delete comment / reply |
+| POST | `/api/v1/feed/comments/{id}/reply/` | Reply to comment |
+| **Communities** | | |
+| GET | `/api/v1/communities/` | List specialty communities |
+| GET | `/api/v1/communities/{id}/` | Community detail |
+| POST | `/api/v1/communities/{id}/join/` | Join community |
+| DELETE | `/api/v1/communities/{id}/leave/` | Leave community |
+| GET | `/api/v1/communities/{id}/posts/` | Community posts |
+| POST | `/api/v1/communities/{id}/posts/` | Post in community |
 | **Hospitals** | | |
 | POST | `/api/v1/hospitals/register/` | Register new hospital |
 | GET | `/api/v1/hospitals/me/` | Get my hospital profile |
-| POST | `/api/v1/hospitals/me/branches/` | Add hospital branch |
+| PATCH | `/api/v1/hospitals/me/` | Update hospital profile |
+| POST | `/api/v1/hospitals/me/verification/submit/` | Submit hospital verification documents |
+| GET | `/api/v1/hospitals/me/verification/` | Get hospital verification status |
+| POST | `/api/v1/hospitals/me/branches/` | Add branch |
+| GET | `/api/v1/hospitals/me/branches/` | List branches |
+| PATCH | `/api/v1/hospitals/me/branches/{id}/` | Update branch |
+| DELETE | `/api/v1/hospitals/me/branches/{id}/` | Deactivate branch |
 | POST | `/api/v1/hospitals/me/departments/` | Add department |
-| POST | `/api/v1/hospitals/me/invite-user/` | Invite HR/Recruiter |
-| POST | `/api/v1/hospitals/me/upload-logo/` | Upload hospital logo |
+| GET | `/api/v1/hospitals/me/departments/` | List departments |
+| POST | `/api/v1/hospitals/me/users/` | Add hospital user |
+| GET | `/api/v1/hospitals/me/users/` | List hospital users |
+| PATCH | `/api/v1/hospitals/me/users/{id}/` | Update user role/branch/status |
+| DELETE | `/api/v1/hospitals/me/users/{id}/` | Revoke user membership |
+| POST | `/api/v1/hospitals/me/invite-user/` | Invite HR / Recruiter |
+| GET | `/api/v1/hospitals/me/staff/` | List staff |
+| POST | `/api/v1/hospitals/me/upload-logo/` | Upload logo |
+| GET | `/api/v1/hospitals/{id}/` | View public hospital profile |
+| **Jobs** | | |
+| POST | `/api/v1/jobs/` | Create job posting |
+| PATCH | `/api/v1/jobs/{id}/` | Update job posting |
+| POST | `/api/v1/jobs/{id}/publish/` | Publish a draft job |
+| POST | `/api/v1/jobs/{id}/close/` | Close a job posting |
+| GET | `/api/v1/jobs/` | List jobs |
+| GET | `/api/v1/jobs/{id}/` | Get job details |
+| POST | `/api/v1/jobs/{id}/save/` | Save a job |
+| DELETE | `/api/v1/jobs/{id}/save/` | Unsave a job |
+| GET | `/api/v1/doctors/me/saved-jobs/` | List saved jobs |
+| GET | `/api/v1/jobs/my-applications/` | My applications |
+| POST | `/api/v1/jobs/{id}/apply/` | Apply to job |
+| POST | `/api/v1/jobs/{id}/withdraw/` | Withdraw application |
+| GET | `/api/v1/jobs/{id}/applications/` | View applicants |
+| PATCH | `/api/v1/jobs/applications/{id}/status/` | Update application status |
+| POST | `/api/v1/applications/{id}/notes/` | Add internal note |
+| GET | `/api/v1/applications/{id}/notes/` | List application notes |
+| POST | `/api/v1/applications/{id}/interview/` | Schedule interview |
+| PATCH | `/api/v1/applications/{id}/interview/{interview_id}/` | Update interview outcome |
+| POST | `/api/v1/applications/{id}/offer/` | Send offer |
+| POST | `/api/v1/applications/{id}/invite/` | Invite doctor to apply |
+| GET | `/api/v1/jobs/{id}/matches/` | Get matched doctors for a job |
+| GET | `/api/v1/doctors/me/job-recommendations/` | Get recommended jobs for doctor |
+| **Master Data** | | |
+| GET | `/api/v1/masters/specialties/` | List specialties |
+| GET | `/api/v1/masters/qualifications/` | List qualifications |
+| GET | `/api/v1/masters/job-types/` | List job types |
+| GET | `/api/v1/masters/shift-types/` | List shift types |
 | **Availability** | | |
-| POST | `/api/v1/availability/` | Create availability |
-| GET | `/api/v1/availability/me/` | Get my availability |
-| PUT | `/api/v1/availability/me/` | Update availability |
+| POST | `/api/v1/availability/` | Post availability |
+| GET | `/api/v1/availability/me/` | List my availabilities |
+| PATCH | `/api/v1/availability/{id}/` | Update availability |
+| DELETE | `/api/v1/availability/{id}/` | Deactivate availability |
+| GET | `/api/v1/availability/{id}/slots/` | List slots |
+| POST | `/api/v1/availability/{id}/slots/` | Add slot |
+| PATCH | `/api/v1/availability/slots/{slot_id}/` | Update a slot |
+| DELETE | `/api/v1/availability/slots/{slot_id}/` | Delete a slot |
+| GET | `/api/v1/availability/preferences/` | Get availability preferences |
+| PUT | `/api/v1/availability/preferences/` | Update availability preferences |
 | **Shifts** | | |
-| POST | `/api/v1/shifts/requirements/` | Create shift requirement |
-| GET | `/api/v1/shifts/requirements/` | List shift requirements |
-| POST | `/api/v1/shifts/requests/` | Send shift request |
-| GET | `/api/v1/shifts/requests/` | List shift requests |
+| POST | `/api/v1/shifts/requirements/` | Post shift requirement |
+| GET | `/api/v1/shifts/requirements/` | List open requirements |
+| PATCH | `/api/v1/shifts/requirements/{id}/` | Update shift requirement |
+| GET | `/api/v1/shifts/requirements/mine/` | My hospital's requirements |
+| POST | `/api/v1/shifts/requirements/{id}/match/` | Get matched doctors |
+| GET | `/api/v1/shifts/requirements/{id}/matched-doctors/` | Get matched doctors |
+| POST | `/api/v1/shifts/requirements/{id}/request/` | Doctor requests shift |
+| PATCH | `/api/v1/shifts/requests/{id}/respond/` | Doctor accepts/declines |
+| PATCH | `/api/v1/shifts/requests/{id}/confirm/` | Hospital confirms |
+| PATCH | `/api/v1/shifts/requests/{id}/complete/` | Mark completed |
+| PATCH | `/api/v1/shifts/requests/{id}/cancel/` | Cancel request |
+| GET | `/api/v1/shifts/requests/{id}/history/` | Shift request state history |
+| GET | `/api/v1/shifts/requests/mine/` | My shift requests |
+| **Messaging** | | |
+| POST | `/api/v1/messages/conversations/` | Start conversation |
+| GET | `/api/v1/messages/conversations/` | List conversations |
+| GET | `/api/v1/messages/conversations/{id}/messages/` | Get messages |
+| POST | `/api/v1/messages/conversations/{id}/messages/` | Send message |
+| POST | `/api/v1/messages/conversations/{id}/read/` | Mark conversation as read |
+| POST | `/api/v1/messages/conversations/{id}/report/` | Report conversation |
+| POST | `/api/v1/messages/conversations/{id}/block/` | Block conversation |
+| DELETE | `/api/v1/messages/conversations/{id}/block/` | Unblock conversation |
+| **Devices & Notifications** | | |
+| POST | `/api/v1/devices/` | Register device for push notifications |
+| DELETE | `/api/v1/devices/{id}/` | Revoke device token |
+| GET | `/api/v1/notifications/` | List notifications |
+| GET | `/api/v1/notifications/unread-count/` | Unread count |
+| PATCH | `/api/v1/notifications/{id}/read/` | Mark as read |
+| POST | `/api/v1/notifications/read-all/` | Mark all as read |
+| GET | `/api/v1/notification-preferences/` | Get notification preferences |
+| PUT | `/api/v1/notification-preferences/` | Update notification preferences |
+| **Admin CRM** | | |
+| GET | `/api/v1/admin/dashboard/` | Platform overview metrics |
+| GET | `/api/v1/admin/doctors/verification-queue/` | Doctor verification queue |
+| GET | `/api/v1/admin/doctors/verification-cases/{id}/` | Verification case detail |
+| POST | `/api/v1/admin/doctors/verification-cases/{id}/approve/` | Approve doctor verification |
+| POST | `/api/v1/admin/doctors/verification-cases/{id}/reject/` | Reject doctor verification |
+| POST | `/api/v1/admin/doctors/verification-cases/{id}/resubmit/` | Allow resubmission |
+| GET | `/api/v1/admin/hospitals/verification-queue/` | Hospital verification queue |
+| POST | `/api/v1/admin/hospitals/verification-cases/{id}/approve/` | Approve hospital verification |
+| POST | `/api/v1/admin/hospitals/verification-cases/{id}/reject/` | Reject hospital verification |
+| GET | `/api/v1/admin/users/` | List all users |
+| POST | `/api/v1/admin/users/{id}/restrict/` | Restrict user |
+| POST | `/api/v1/admin/users/{id}/suspend/` | Suspend user |
+| POST | `/api/v1/admin/users/{id}/restore/` | Restore user |
+| POST | `/api/v1/admin/users/{id}/deactivate/` | Deactivate user |
+| GET | `/api/v1/admin/reports/` | Reports queue |
+| GET | `/api/v1/admin/reports/{id}/` | Report detail |
+| POST | `/api/v1/admin/reports/{id}/action/` | Action a report |
+| POST | `/api/v1/admin/reports/{id}/dismiss/` | Dismiss a report |
+| POST | `/api/v1/admin/reports/{id}/escalate/` | Escalate a report |
+| POST | `/api/v1/admin/posts/{id}/moderate/` | Moderate a post |
+| POST | `/api/v1/admin/jobs/{id}/moderate/` | Moderate a job |
+| POST | `/api/v1/admin/communities/` | Create specialty community |
+| PATCH | `/api/v1/admin/communities/{id}/` | Update community |
+| POST | `/api/v1/admin/communities/{id}/archive/` | Archive community |
+| GET | `/api/v1/admin/audit-logs/` | Audit log records |
+| GET | `/api/v1/admin/analytics/overview/` | Analytics overview |
+| **Support** | | |
+| POST | `/api/v1/support/tickets/` | Create support ticket |
+| GET | `/api/v1/support/tickets/` | List my support tickets |
+| GET | `/api/v1/support/tickets/{id}/` | Ticket detail + messages |
+| POST | `/api/v1/support/tickets/{id}/messages/` | Add message to ticket |
+| PATCH | `/api/v1/admin/support/tickets/{id}/` | Update ticket status (admin) |
+| POST | `/api/v1/admin/support/tickets/{id}/resolve/` | Resolve ticket |
+| **Billing** | | |
+| GET | `/api/v1/billing/plans/` | List billing plans |
+| GET | `/api/v1/billing/subscription/` | Current hospital subscription |
+| POST | `/api/v1/billing/subscription/` | Subscribe to a plan |
+| PATCH | `/api/v1/billing/subscription/` | Update/cancel subscription |
+| GET | `/api/v1/billing/invoices/` | List invoices |
+| GET | `/api/v1/billing/invoices/{id}/` | Invoice detail |
+| POST | `/api/v1/billing/webhooks/{provider}/` | Payment webhook (idempotent) |
+| POST | `/api/v1/admin/billing/refunds/` | Issue refund |
 
 ---
 
-## 13. Security
+## 15. Security
 
-### 10.1 Authentication Flow
+### 15.1 Authentication Flow
 
 ```
 ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
@@ -2458,7 +2923,7 @@ docker-compose -f docker-compose.production.yml exec backend python manage.py co
                                               └─────────────┘
 ```
 
-### 10.2 Security Features
+### 15.2 Security Features
 
 ```python
 # Security headers middleware
@@ -2499,7 +2964,7 @@ app.add_middleware(
 )
 ```
 
-### 10.3 Data Encryption
+### 15.3 Data Encryption
 
 ```python
 # core/encryption.py
@@ -2528,9 +2993,9 @@ class DataEncryption:
 
 ---
 
-## 14. Testing
+## 16. Testing
 
-### 11.1 Running Tests
+### 16.1 Running Tests
 
 ```bash
 # Run all tests
@@ -2546,7 +3011,7 @@ pytest --cov=fastapi_app --cov=apps tests/
 pytest --cov=fastapi_app --cov=apps --cov-report=html tests/
 ```
 
-### 11.2 Test Example
+### 16.2 Test Example
 
 ```python
 # tests/test_auth.py
@@ -2575,9 +3040,9 @@ def test_verify_otp_invalid():
 
 ---
 
-## 15. Troubleshooting
+## 17. Troubleshooting
 
-### 12.1 Common Issues
+### 17.1 Common Issues
 
 | Problem | Cause | Fix |
 |---------|-------|-----|
@@ -2588,7 +3053,7 @@ def test_verify_otp_invalid():
 | `postgis` extension missing | PostGIS not installed | `sudo apt install postgresql-16-postgis-3` |
 | OTP SMS not delivered | Invalid `SMS_API_KEY` | Check provider dashboard for key validity |
 
-### 12.2 Logs
+### 17.2 Logs
 
 ```bash
 # Django logs
@@ -2606,38 +3071,68 @@ docker-compose logs -f
 
 ---
 
-## 16. Roadmap
+## 18. Roadmap
 
-### Phase 1 — MVP (Current)
+### Phase 1 — MVP (Current ✅)
+- [x] Phone + password registration & login
 - [x] OTP-based authentication
-- [x] Doctor profile with NMC verification
-- [x] Job posting & one-tap apply
-- [x] Doctor availability & shift marketplace
-- [x] Basic messaging
+- [x] JWT session management with refresh rotation & revocation
+- [x] Doctor profile with NMC verification (UNVERIFIED → PENDING → VERIFIED → REJECTED → RESUBMISSION)
+- [x] Doctor qualifications, experience & hospital affiliations
+- [x] Doctor professional status & privacy settings
+- [x] Doctor search (name / specialty / city / experience)
+- [x] Feed posts (UPDATE / CASE / ARTICLE / PHOTO) with patient-privacy confirmation
+- [x] Post likes, comments & threaded replies
+- [x] Doctor connections (send / accept / decline / withdraw)
+- [x] Follow / unfollow users
+- [x] Block / unblock users
+- [x] Home summary API (stats, urgent jobs, suggested doctors)
+- [x] Hospital follow
+- [x] Hospital registration, branches, departments, staff (ADMIN/HR/RECRUITER roles)
+- [x] Hospital verification workflow
+- [x] Job posting (DRAFT → PUBLISHED → CLOSED) & one-tap apply
+- [x] Job save / unsave
+- [x] Recruitment CRM pipeline with full history log (notes, interview, offer)
+- [x] Doctor availability & slot management
+- [x] Availability preferences
+- [x] Shift requirements & full shift lifecycle (request/accept/confirm/complete/cancel)
+- [x] Shift state history
+- [x] Doctor-shift matching algorithm (configurable weights via matching_configs)
+- [x] Job-doctor matching with score components & reasons
+- [x] Direct messaging (conversations + messages)
+- [x] Messaging read receipts, block/report conversation
+- [x] Device token registration for push notifications
+- [x] Notifications (list, read, unread count, preferences)
+- [x] File upload with signed URLs (photos, logos, credentials)
+- [x] Universal search (doctors / hospitals / jobs / communities)
+- [x] Reports (profile/post/comment/job/hospital)
+- [x] Django Admin panel
+- [x] Docker Compose setup
 
 ### Phase 2 — Q3 2026
-- [ ] Doctor connections (send / accept / withdraw)
-- [ ] Feed & post system (clinical cases, articles, updates)
+- [ ] Admin CRM — verification queue, moderation, reports, restrictions, audit logs
+- [ ] Support ticket system
+- [ ] Analytics dashboard (operational metrics)
+- [ ] Push notifications via Firebase FCM
 - [ ] Specialty communities & group discussions
 - [ ] Hospital verification via document OCR
-- [ ] AI-powered job matching score (specialty + experience + location + qualification)
-- [ ] Push notifications via FCM
 - [ ] CME credit tracking
 - [ ] iOS app support
+- [ ] WebSocket real-time messaging
 
 ### Phase 3 — Q4 2026
+- [ ] Billing & subscription management (feature-flagged)
 - [ ] Peer endorsements & skill recommendations
 - [ ] Second opinion & case referral network
 - [ ] Hospital analytics dashboard (applications, hires, shift fill rate)
-- [ ] Telemedicine / video consultation scheduling
 - [ ] Multi-language support (Hindi, Tamil, Telugu)
-- [ ] AI-powered doctor matching for shift requirements
+- [ ] Telemedicine / video consultation scheduling
 
 ---
 
-## 17. Contributing
+## 19. Contributing
 
-### 14.1 Development Guidelines
+### 19.1 Development Guidelines
 
 1. **Code Style**
    - Python: Black, isort, flake8
@@ -2657,7 +3152,7 @@ docker-compose logs -f
    - `test:` Tests
    - `refactor:` Code refactor
 
-### 14.2 Pull Request Process
+### 19.2 Pull Request Process
 
 1. Fork the repository
 2. Create feature branch
@@ -2685,4 +3180,4 @@ This project is proprietary and confidential. Unauthorized copying, distribution
 
 ---
 
-*Last updated: August 2026 | Maintained by Pavan Kumar Dubey*
+*Last updated: September 2026 | Version 2.0 | Maintained by Pavan Kumar Dubey*
