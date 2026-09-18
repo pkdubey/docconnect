@@ -41,6 +41,8 @@ class DoctorProfileUpdate(BaseModel):
     professional_location: Optional[Location] = None
     experience_years: Optional[float] = Field(None, ge=0, le=60)
     open_to_opportunities: Optional[bool] = None
+    languages: Optional[List[str]] = None
+    career_preferences: Optional[Dict[str, Any]] = None
 
 
 class DoctorRegistrationCreate(BaseModel):
@@ -97,6 +99,8 @@ class DoctorProfileOut(BaseModel):
     open_to_opportunities: bool
     verification_status: str
     is_verified: bool
+    languages: List[str]
+    career_preferences: Dict[str, Any]
     created_at: str
     updated_at: str
 
@@ -190,6 +194,8 @@ def _profile_dict(dp) -> DoctorProfileOut:
         open_to_opportunities=dp.open_to_opportunities,
         verification_status=dp.verification_status,
         is_verified=dp.is_verified,
+        languages=dp.languages or [],
+        career_preferences=dp.career_preferences or {},
         created_at=dp.created_at.isoformat(),
         updated_at=dp.updated_at.isoformat(),
     )
@@ -372,6 +378,213 @@ async def delete_experience(exp_id: str, current_doctor=Depends(get_current_doct
         raise HTTPException(status_code=404, detail="Experience not found")
 
 
+@router.patch("/profile/me/experiences/{exp_id}/", response_model=ExperienceOut, summary="Update experience")
+async def update_experience(exp_id: str, exp: DoctorExperienceCreate, current_doctor=Depends(get_current_doctor)):
+    from apps.doctors.models import DoctorExperience
+
+    def _update():
+        try:
+            e = DoctorExperience.objects.get(id=exp_id, doctor=current_doctor)
+        except DoctorExperience.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Experience not found")
+        for field, value in exp.model_dump(exclude_none=True).items():
+            setattr(e, field, value)
+        e.save()
+        return e
+
+    try:
+        e = await sync_to_async(_update, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return ExperienceOut(id=str(e.id), role=e.role, hospital_name=e.hospital_name,
+                         location=e.location, start_date=str(e.start_date),
+                         end_date=str(e.end_date) if e.end_date else None, is_current=e.is_current)
+
+
+class AffiliationCreate(BaseModel):
+    hospital_name: str = Field(..., max_length=255)
+    role: str = Field(..., max_length=100)
+    start_date: date
+    end_date: Optional[date] = None
+    is_current: bool = False
+
+
+class AffiliationOut(BaseModel):
+    id: str
+    hospital_name: str
+    role: str
+    start_date: str
+    end_date: Optional[str]
+    is_current: bool
+
+
+@router.post("/profile/me/affiliations/", response_model=AffiliationOut, status_code=201, summary="Add hospital affiliation")
+async def add_affiliation(aff: AffiliationCreate, current_doctor=Depends(get_current_doctor)):
+    import uuid
+    from django.utils import timezone
+
+    def _create():
+        affiliations = current_doctor.metadata.get('affiliations', [])
+        new_aff = {
+            "id": str(uuid.uuid4()),
+            "hospital_name": aff.hospital_name,
+            "role": aff.role,
+            "start_date": str(aff.start_date),
+            "end_date": str(aff.end_date) if aff.end_date else None,
+            "is_current": aff.is_current,
+        }
+        affiliations.append(new_aff)
+        current_doctor.metadata['affiliations'] = affiliations
+        current_doctor.save(update_fields=['metadata'])
+        return new_aff
+
+    aff_data = await sync_to_async(_create, thread_sensitive=True)()
+    return AffiliationOut(**aff_data)
+
+
+@router.get("/profile/me/affiliations/", response_model=List[AffiliationOut], summary="List affiliations")
+async def list_affiliations(current_doctor=Depends(get_current_doctor)):
+    affiliations = current_doctor.metadata.get('affiliations', [])
+    return [AffiliationOut(**a) for a in affiliations]
+
+
+@router.patch("/profile/me/affiliations/{aff_id}/", response_model=AffiliationOut, summary="Update affiliation")
+async def update_affiliation(aff_id: str, aff: AffiliationCreate, current_doctor=Depends(get_current_doctor)):
+    def _update():
+        affiliations = current_doctor.metadata.get('affiliations', [])
+        for i, a in enumerate(affiliations):
+            if a['id'] == aff_id:
+                affiliations[i].update({
+                    "hospital_name": aff.hospital_name, "role": aff.role,
+                    "start_date": str(aff.start_date),
+                    "end_date": str(aff.end_date) if aff.end_date else None,
+                    "is_current": aff.is_current,
+                })
+                current_doctor.metadata['affiliations'] = affiliations
+                current_doctor.save(update_fields=['metadata'])
+                return affiliations[i]
+        raise HTTPException(status_code=404, detail="Affiliation not found")
+
+    try:
+        aff_data = await sync_to_async(_update, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return AffiliationOut(**aff_data)
+
+
+@router.delete("/profile/me/affiliations/{aff_id}/", status_code=204, summary="Delete affiliation")
+async def delete_affiliation(aff_id: str, current_doctor=Depends(get_current_doctor)):
+    def _delete():
+        affiliations = current_doctor.metadata.get('affiliations', [])
+        new_affiliations = [a for a in affiliations if a['id'] != aff_id]
+        if len(new_affiliations) == len(affiliations):
+            raise HTTPException(status_code=404, detail="Affiliation not found")
+        current_doctor.metadata['affiliations'] = new_affiliations
+        current_doctor.save(update_fields=['metadata'])
+
+    try:
+        await sync_to_async(_delete, thread_sensitive=True)()
+    except HTTPException:
+        raise
+
+
+@router.get("/profile/me/verification/", summary="Get verification status")
+async def get_verification_status(current_doctor=Depends(get_current_doctor)):
+    return {
+        "verification_status": current_doctor.verification_status,
+        "is_verified": current_doctor.is_verified,
+        "rejected_reason": current_doctor.verification_rejected_reason,
+    }
+
+
+@router.post("/profile/me/verification/submit/", summary="Submit verification documents")
+async def submit_verification(current_doctor=Depends(get_current_doctor)):
+    def _submit():
+        if current_doctor.verification_status not in ('UNVERIFIED',):
+            raise HTTPException(status_code=400, detail=f"Cannot submit from status: {current_doctor.verification_status}")
+        if not current_doctor.registrations.exists():
+            raise HTTPException(status_code=400, detail="Add at least one medical registration first")
+        current_doctor.verification_status = 'PENDING'
+        current_doctor.save(update_fields=['verification_status'])
+
+    try:
+        await sync_to_async(_submit, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "verification_status": "PENDING", "message": "Verification submitted for review"}
+
+
+@router.post("/profile/me/verification/resubmit/", summary="Resubmit after rejection")
+async def resubmit_verification(current_doctor=Depends(get_current_doctor)):
+    def _resubmit():
+        if current_doctor.verification_status != 'REJECTED':
+            raise HTTPException(status_code=400, detail="Can only resubmit after rejection")
+        current_doctor.verification_status = 'PENDING'
+        current_doctor.verification_rejected_reason = None
+        current_doctor.save(update_fields=['verification_status', 'verification_rejected_reason'])
+
+    try:
+        await sync_to_async(_resubmit, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "verification_status": "PENDING"}
+
+
+class ProfessionalStatusUpdate(BaseModel):
+    open_to_opportunities: Optional[bool] = None
+    career_visibility: Optional[str] = None
+
+
+@router.get("/profile/me/status/", summary="Get professional status")
+async def get_professional_status(current_doctor=Depends(get_current_doctor)):
+    return {
+        "open_to_opportunities": current_doctor.open_to_opportunities,
+        "career_visibility": current_doctor.career_visibility,
+        "verification_status": current_doctor.verification_status,
+    }
+
+
+@router.put("/profile/me/status/", summary="Update professional status")
+async def update_professional_status(body: ProfessionalStatusUpdate, current_doctor=Depends(get_current_doctor)):
+    def _update():
+        if body.open_to_opportunities is not None:
+            current_doctor.open_to_opportunities = body.open_to_opportunities
+        if body.career_visibility:
+            current_doctor.career_visibility = body.career_visibility
+        current_doctor.save(update_fields=['open_to_opportunities', 'career_visibility'])
+
+    await sync_to_async(_update, thread_sensitive=True)()
+    return {"success": True, "open_to_opportunities": current_doctor.open_to_opportunities,
+            "career_visibility": current_doctor.career_visibility}
+
+
+class PrivacySettingsUpdate(BaseModel):
+    profile_visibility: Optional[str] = None  # EVERYONE / DOCTORS_ONLY / CONNECTIONS_ONLY
+    career_visibility: Optional[str] = None   # VERIFIED_HOSPITALS / SELECTED_HOSPITALS / HIDDEN
+
+
+@router.get("/profile/me/privacy/", summary="Get privacy settings")
+async def get_privacy_settings(current_doctor=Depends(get_current_doctor)):
+    return {
+        "profile_visibility": current_doctor.profile_visibility,
+        "career_visibility": current_doctor.career_visibility,
+    }
+
+
+@router.put("/profile/me/privacy/", summary="Update privacy settings")
+async def update_privacy_settings(body: PrivacySettingsUpdate, current_doctor=Depends(get_current_doctor)):
+    def _update():
+        if body.profile_visibility:
+            current_doctor.profile_visibility = body.profile_visibility
+        if body.career_visibility:
+            current_doctor.career_visibility = body.career_visibility
+        current_doctor.save(update_fields=['profile_visibility', 'career_visibility'])
+
+    await sync_to_async(_update, thread_sensitive=True)()
+    return {"success": True, "profile_visibility": current_doctor.profile_visibility,
+            "career_visibility": current_doctor.career_visibility}
+
+
 @router.get("/profile/{doctor_id}/", response_model=DoctorProfileOut, summary="Get doctor profile by ID")
 async def get_doctor_profile(doctor_id: str, current_user=Depends(get_current_user)):
     from apps.doctors.models import DoctorProfile
@@ -404,3 +617,57 @@ async def upload_photo(file: UploadFile = File(...), current_doctor=Depends(get_
         current_doctor.save(update_fields=['photo_file_id'])
     ), thread_sensitive=True)()
     return PhotoUploadOut(success=True, file_id=str(file_id))
+
+
+@router.get("/me/saved-jobs/", summary="List saved jobs")
+async def list_saved_jobs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_doctor=Depends(get_current_doctor),
+):
+    from apps.jobs.models import JobPost
+
+    def _list():
+        saved_ids = current_doctor.metadata.get('saved_jobs', [])
+        qs = JobPost.objects.filter(id__in=saved_ids, status='PUBLISHED').select_related('hospital')
+        total = qs.count()
+        results = list(qs[(page - 1) * page_size: page * page_size])
+        return total, results
+
+    total, results = await sync_to_async(_list, thread_sensitive=True)()
+    return {
+        "total": total, "page": page,
+        "results": [{"id": str(j.id), "title": j.title, "hospital_name": j.hospital.name,
+                     "job_type": j.job_type, "location": j.location or {},
+                     "is_urgent": j.is_urgent} for j in results]
+    }
+
+
+@router.get("/me/job-recommendations/", summary="Get recommended jobs for doctor")
+async def doctor_job_recommendations(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_doctor=Depends(get_current_doctor),
+):
+    from apps.jobs.models import JobPost
+
+    def _recommend():
+        qs = JobPost.objects.filter(status='PUBLISHED').select_related('hospital')
+        if current_doctor.primary_specialization_id:
+            qs = qs.filter(specialty_id=current_doctor.primary_specialization_id)
+        qs = qs.filter(experience_min_years__lte=current_doctor.experience_years)
+        total = qs.count()
+        results = list(qs.order_by('-published_at')[(page - 1) * page_size: page * page_size])
+        return total, results
+
+    total, jobs = await sync_to_async(_recommend, thread_sensitive=True)()
+    return {
+        "total": total, "page": page,
+        "results": [{
+            "id": str(j.id), "title": j.title,
+            "hospital_name": j.hospital.name, "job_type": j.job_type,
+            "location": j.location or {}, "is_urgent": j.is_urgent,
+            "salary_min": str(j.salary_min) if j.salary_min else None,
+            "salary_visibility": j.salary_visibility,
+        } for j in jobs]
+    }

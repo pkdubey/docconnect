@@ -82,7 +82,8 @@ class JobListItem(BaseModel):
         "hospital_name": "Apollo Hospital", "job_type": "FULL_TIME",
         "location": {"city": "Mumbai", "state": "Maharashtra"}, "is_urgent": False,
         "salary_min": "150000", "salary_max": "250000", "salary_visibility": "PUBLIC",
-        "published_at": "2025-01-01T00:00:00Z"
+        "published_at": "2025-01-01T00:00:00Z",
+        "match_score": 85, "match_factors": ["Specialization match", "Experience match"]
     }})
     id: str
     title: str
@@ -94,6 +95,8 @@ class JobListItem(BaseModel):
     salary_max: Optional[str]
     salary_visibility: str
     published_at: Optional[str]
+    match_score: Optional[int] = None
+    match_factors: Optional[List[str]] = None
 
 
 class JobListResponse(BaseModel):
@@ -202,6 +205,34 @@ class ApplicationStatusOut(BaseModel):
     status: str
 
 
+# ── Match Score Helper ───────────────────────────────────────
+
+def _compute_match(job, doctor) -> tuple:
+    """Return (score 0-100, factors list) for a job vs doctor."""
+    if doctor is None:
+        return None, None
+    score = 0
+    factors = []
+    if job.specialty_id and str(job.specialty_id) == str(doctor.primary_specialization_id or ''):
+        score += 40
+        factors.append("Specialization match")
+    exp = float(doctor.experience_years or 0)
+    req = float(job.experience_min_years or 0)
+    if exp >= req:
+        score += 30
+        factors.append("Experience match")
+    elif exp >= req * 0.8:
+        score += 15
+        factors.append("Near experience match")
+    if doctor.open_to_opportunities:
+        score += 15
+        factors.append("Open to opportunities")
+    if doctor.verification_status == 'VERIFIED':
+        score += 15
+        factors.append("Verified doctor")
+    return min(score, 100), factors
+
+
 # ── Endpoints ─────────────────────────────────────────────────
 
 @router.post("/", response_model=JobCreateOut, status_code=201, summary="Create a job posting")
@@ -299,20 +330,30 @@ async def list_jobs(
             ).filter(rank__gte=0.1).order_by('-rank')
         total = qs.count()
         results = list(qs[(page - 1) * page_size: page * page_size])
-        return total, results
+        # Fetch doctor profile for match scoring
+        doctor = None
+        if current_user.user_type == 'DOCTOR':
+            try:
+                doctor = current_user.doctor_profile
+            except Exception:
+                pass
+        return total, results, doctor
 
-    total, results = await sync_to_async(_list, thread_sensitive=True)()
-    return JobListResponse(
-        total=total, page=page, page_size=page_size,
-        results=[JobListItem(
+    total, results, doctor = await sync_to_async(_list, thread_sensitive=True)()
+    items = []
+    for j in results:
+        score, factors = _compute_match(j, doctor)
+        items.append(JobListItem(
             id=str(j.id), title=j.title, hospital_name=j.hospital.name,
             job_type=j.job_type, location=j.location or {}, is_urgent=j.is_urgent,
             salary_min=str(j.salary_min) if j.salary_min else None,
             salary_max=str(j.salary_max) if j.salary_max else None,
             salary_visibility=j.salary_visibility,
             published_at=j.published_at.isoformat() if j.published_at else None,
-        ) for j in results],
-    )
+            match_score=score,
+            match_factors=factors,
+        ))
+    return JobListResponse(total=total, page=page, page_size=page_size, results=items)
 
 
 @router.get("/{job_id}/", response_model=JobDetailOut, summary="Get job details")
@@ -458,3 +499,495 @@ async def update_application_status(
     except HTTPException:
         raise
     return ApplicationStatusOut(success=True, application_id=application_id, status=body.status)
+
+
+# ── Save / Unsave Job ─────────────────────────────────────────
+
+@router.post("/{job_id}/save/", status_code=201, summary="Save a job")
+async def save_job(job_id: str, current_doctor=Depends(get_current_doctor)):
+    def _save():
+        saved = current_doctor.metadata.get('saved_jobs', [])
+        if job_id not in saved:
+            saved.append(job_id)
+            current_doctor.metadata['saved_jobs'] = saved
+            current_doctor.save(update_fields=['metadata'])
+
+    await sync_to_async(_save, thread_sensitive=True)()
+    return {"success": True, "message": "Job saved"}
+
+
+@router.delete("/{job_id}/save/", summary="Unsave a job")
+async def unsave_job(job_id: str, current_doctor=Depends(get_current_doctor)):
+    def _unsave():
+        saved = current_doctor.metadata.get('saved_jobs', [])
+        if job_id in saved:
+            saved.remove(job_id)
+            current_doctor.metadata['saved_jobs'] = saved
+            current_doctor.save(update_fields=['metadata'])
+
+    await sync_to_async(_unsave, thread_sensitive=True)()
+    return {"success": True, "message": "Job unsaved"}
+
+
+@router.post("/{job_id}/publish/", summary="Publish a draft job")
+async def publish_job(job_id: str, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+    from apps.jobs.models import JobPost
+
+    def _publish():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        try:
+            job = JobPost.objects.get(id=job_id, hospital=hu.hospital, status='DRAFT')
+        except JobPost.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Draft job not found")
+        job.status = 'PUBLISHED'
+        job.published_at = datetime.now()
+        job.save(update_fields=['status', 'published_at'])
+
+    try:
+        await sync_to_async(_publish, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "status": "PUBLISHED"}
+
+
+@router.post("/{job_id}/close/", summary="Close a job posting")
+async def close_job(job_id: str, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+    from apps.jobs.models import JobPost
+
+    def _close():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        updated = JobPost.objects.filter(id=job_id, hospital=hu.hospital).update(status='CLOSED')
+        if not updated:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+    try:
+        await sync_to_async(_close, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "status": "CLOSED"}
+
+
+class InterviewCreate(BaseModel):
+    scheduled_at: datetime
+    mode: str = "IN_PERSON"  # IN_PERSON / VIDEO / PHONE
+    notes: Optional[str] = None
+
+
+class OfferCreate(BaseModel):
+    salary: Optional[str] = None
+    joining_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class NoteCreate(BaseModel):
+    note: str
+
+
+@router.post("/applications/{application_id}/interview/", status_code=201, summary="Schedule interview")
+async def schedule_interview(application_id: str, body: InterviewCreate, current_user=Depends(get_current_user)):
+    import uuid
+    from apps.hospitals.models import HospitalUser
+    from apps.jobs.models import JobApplication
+
+    def _schedule():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        try:
+            app_obj = JobApplication.objects.select_related('job').get(
+                id=application_id, job__hospital=hu.hospital
+            )
+        except JobApplication.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Application not found")
+        interviews = app_obj.metadata.get('interviews', [])
+        interview = {
+            "id": str(uuid.uuid4()),
+            "scheduled_at": body.scheduled_at.isoformat(),
+            "mode": body.mode,
+            "notes": body.notes,
+            "outcome": None,
+        }
+        interviews.append(interview)
+        app_obj.metadata['interviews'] = interviews
+        app_obj.status = 'INTERVIEW'
+        app_obj.save(update_fields=['metadata', 'status', 'updated_at'])
+        return interview
+
+    try:
+        interview = await sync_to_async(_schedule, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "interview_id": interview['id'], "scheduled_at": interview['scheduled_at']}
+
+
+@router.patch("/applications/{application_id}/interview/{interview_id}/", status_code=200, summary="Update interview outcome")
+async def update_interview_outcome(
+    application_id: str,
+    interview_id: str,
+    outcome: str,
+    notes: Optional[str] = None,
+    current_user=Depends(get_current_user),
+):
+    from apps.hospitals.models import HospitalUser
+    from apps.jobs.models import JobApplication
+
+    def _update():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        try:
+            app_obj = JobApplication.objects.select_related('job').get(
+                id=application_id, job__hospital=hu.hospital
+            )
+        except JobApplication.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Application not found")
+        interviews = app_obj.metadata.get('interviews', [])
+        for iv in interviews:
+            if iv['id'] == interview_id:
+                iv['outcome'] = outcome
+                if notes:
+                    iv['outcome_notes'] = notes
+                app_obj.metadata['interviews'] = interviews
+                app_obj.save(update_fields=['metadata'])
+                return iv
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    try:
+        iv = await sync_to_async(_update, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "interview_id": iv['id'], "outcome": iv['outcome']}
+
+
+@router.post("/applications/{application_id}/offer/", status_code=201, summary="Send offer")
+async def send_offer(application_id: str, body: OfferCreate, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+    from apps.jobs.models import ApplicationHistory, JobApplication
+
+    def _offer():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        try:
+            app_obj = JobApplication.objects.select_related('job').get(
+                id=application_id, job__hospital=hu.hospital
+            )
+        except JobApplication.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Application not found")
+        old_status = app_obj.status
+        app_obj.metadata['offer'] = {
+            "salary": body.salary, "joining_date": body.joining_date, "notes": body.notes
+        }
+        app_obj.status = 'OFFERED'
+        app_obj.save(update_fields=['metadata', 'status', 'updated_at'])
+        ApplicationHistory.objects.create(
+            application=app_obj, from_status=old_status,
+            to_status='OFFERED', changed_by=current_user, notes=body.notes,
+        )
+
+    try:
+        await sync_to_async(_offer, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "status": "OFFERED"}
+
+
+@router.post("/applications/{application_id}/notes/", status_code=201, summary="Add internal note")
+async def add_application_note(application_id: str, body: NoteCreate, current_user=Depends(get_current_user)):
+    import uuid
+    from apps.hospitals.models import HospitalUser
+    from apps.jobs.models import JobApplication
+
+    def _add_note():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        try:
+            app_obj = JobApplication.objects.select_related('job').get(
+                id=application_id, job__hospital=hu.hospital
+            )
+        except JobApplication.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Application not found")
+        notes = app_obj.metadata.get('notes', [])
+        note = {"id": str(uuid.uuid4()), "note": body.note,
+                "added_by": str(current_user.id), "created_at": datetime.now().isoformat()}
+        notes.append(note)
+        app_obj.metadata['notes'] = notes
+        app_obj.save(update_fields=['metadata'])
+        return note
+
+    try:
+        note = await sync_to_async(_add_note, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "note_id": note['id']}
+
+
+@router.get("/applications/{application_id}/notes/", summary="List application notes")
+async def list_application_notes(application_id: str, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+    from apps.jobs.models import JobApplication
+
+    def _list():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        try:
+            app_obj = JobApplication.objects.select_related('job').get(
+                id=application_id, job__hospital=hu.hospital
+            )
+        except JobApplication.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Application not found")
+        return app_obj.metadata.get('notes', [])
+
+    try:
+        notes = await sync_to_async(_list, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"notes": notes, "total": len(notes)}
+
+
+# ── PATCH Job ─────────────────────────────────────────────────
+
+class JobUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=3, max_length=160)
+    description: Optional[str] = None
+    responsibilities: Optional[str] = None
+    requirements: Optional[str] = None
+    salary_min: Optional[Decimal] = Field(None, ge=0)
+    salary_max: Optional[Decimal] = Field(None, ge=0)
+    salary_visibility: Optional[SalaryVisibility] = None
+    is_urgent: Optional[bool] = None
+    positions: Optional[int] = Field(None, ge=1)
+    closing_date: Optional[datetime] = None
+
+
+@router.patch("/{job_id}/", response_model=JobCreateOut, summary="Update job posting")
+async def update_job(job_id: str, body: JobUpdate, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+    from apps.jobs.models import JobPost
+
+    def _update():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        try:
+            job = JobPost.objects.get(id=job_id, hospital=hu.hospital)
+        except JobPost.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Job not found")
+        for field, value in body.model_dump(exclude_none=True).items():
+            if field == 'salary_visibility' and value:
+                value = value.value if hasattr(value, 'value') else value
+            setattr(job, field, value)
+        job.save()
+        return job
+
+    try:
+        job = await sync_to_async(_update, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return JobCreateOut(id=str(job.id), title=job.title, status=job.status, created_at=job.created_at.isoformat())
+
+
+# ── Job Matches ───────────────────────────────────────────────
+
+@router.get("/{job_id}/matches/", summary="Get matched doctors for a job")
+async def get_job_matches(
+    job_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user=Depends(get_current_user),
+):
+    from apps.hospitals.models import HospitalUser
+    from apps.jobs.models import JobPost
+    from apps.doctors.models import DoctorProfile
+
+    def _match():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        try:
+            job = JobPost.objects.get(id=job_id, hospital=hu.hospital)
+        except JobPost.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Job not found")
+        qs = DoctorProfile.objects.filter(
+            verification_status='VERIFIED',
+            open_to_opportunities=True,
+            experience_years__gte=job.experience_min_years,
+        )
+        if job.specialty_id:
+            qs = qs.filter(primary_specialization_id=job.specialty_id)
+        total = qs.count()
+        results = list(qs[(page - 1) * page_size: page * page_size])
+        return total, results, job
+
+    try:
+        total, doctors, job = await sync_to_async(_match, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {
+        "job_id": job_id, "total": total, "page": page,
+        "matched_doctors": [{
+            "doctor_id": str(d.id), "full_name": f"Dr. {d.full_name}",
+            "headline": d.headline, "experience_years": float(d.experience_years),
+            "verification_status": d.verification_status,
+            "location": d.professional_location or {},
+        } for d in doctors]
+    }
+
+
+# ── Application Invite ────────────────────────────────────────
+
+@router.post("/applications/{application_id}/invite/", status_code=201, summary="Invite doctor to apply")
+async def invite_doctor_to_apply(
+    application_id: str,
+    doctor_id: str,
+    job_id: str,
+    current_user=Depends(get_current_user),
+):
+    from apps.hospitals.models import HospitalUser
+    from apps.jobs.models import JobApplication, JobPost
+    from apps.doctors.models import DoctorProfile
+
+    def _invite():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        try:
+            job = JobPost.objects.get(id=job_id, hospital=hu.hospital, status='PUBLISHED')
+        except JobPost.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Job not found")
+        try:
+            doctor = DoctorProfile.objects.get(id=doctor_id)
+        except DoctorProfile.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Doctor not found")
+        if JobApplication.objects.filter(job=job, doctor=doctor).exists():
+            raise HTTPException(status_code=409, detail="Doctor already applied")
+        app = JobApplication.objects.create(
+            job=job, doctor=doctor, status='APPLIED',
+            metadata={"invited_by": str(current_user.id)},
+        )
+        return app
+
+    try:
+        app = await sync_to_async(_invite, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "application_id": str(app.id), "status": "INVITED"}
+
+
+# ── Job Recommendations ───────────────────────────────────────
+
+@router.get("/recommendations/", summary="Get recommended jobs for doctor")
+async def job_recommendations(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_doctor=Depends(get_current_doctor),
+):
+    from apps.jobs.models import JobPost
+
+    def _recommend():
+        qs = JobPost.objects.filter(status='PUBLISHED').select_related('hospital')
+        if current_doctor.primary_specialization_id:
+            qs = qs.filter(specialty_id=current_doctor.primary_specialization_id)
+        qs = qs.filter(experience_min_years__lte=current_doctor.experience_years)
+        total = qs.count()
+        results = list(qs.order_by('-published_at')[(page - 1) * page_size: page * page_size])
+        return total, results
+
+    total, jobs = await sync_to_async(_recommend, thread_sensitive=True)()
+    return {
+        "total": total, "page": page,
+        "results": [{
+            "id": str(j.id), "title": j.title,
+            "hospital_name": j.hospital.name, "job_type": j.job_type,
+            "location": j.location or {}, "is_urgent": j.is_urgent,
+            "salary_min": str(j.salary_min) if j.salary_min else None,
+            "salary_visibility": j.salary_visibility,
+        } for j in jobs]
+    }
+
+
+# ── Applications Router — /api/v1/applications/ (README spec) ─
+
+applications_router = APIRouter(prefix="/api/v1/applications", tags=["Applications"])
+
+
+class InviteBody(BaseModel):
+    doctor_id: str
+    job_id: str
+
+
+@applications_router.post("/{application_id}/interview/", status_code=201, summary="Schedule interview")
+async def _schedule_interview(application_id: str, body: InterviewCreate, current_user=Depends(get_current_user)):
+    return await schedule_interview(application_id, body, current_user)
+
+
+@applications_router.patch("/{application_id}/interview/{interview_id}/", summary="Update interview outcome")
+async def _update_interview(application_id: str, interview_id: str, outcome: str, notes: Optional[str] = None, current_user=Depends(get_current_user)):
+    return await update_interview_outcome(application_id, interview_id, outcome, notes, current_user)
+
+
+@applications_router.post("/{application_id}/offer/", status_code=201, summary="Send offer")
+async def _send_offer(application_id: str, body: OfferCreate, current_user=Depends(get_current_user)):
+    return await send_offer(application_id, body, current_user)
+
+
+@applications_router.post("/{application_id}/notes/", status_code=201, summary="Add internal note")
+async def _add_note(application_id: str, body: NoteCreate, current_user=Depends(get_current_user)):
+    return await add_application_note(application_id, body, current_user)
+
+
+@applications_router.get("/{application_id}/notes/", summary="List application notes")
+async def _list_notes(application_id: str, current_user=Depends(get_current_user)):
+    return await list_application_notes(application_id, current_user)
+
+
+@applications_router.post("/{application_id}/invite/", status_code=201, summary="Invite doctor to apply")
+async def _invite_doctor(application_id: str, body: InviteBody, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+    from apps.jobs.models import JobApplication, JobPost
+    from apps.doctors.models import DoctorProfile
+
+    def _invite():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        try:
+            job = JobPost.objects.get(id=body.job_id, hospital=hu.hospital, status='PUBLISHED')
+        except JobPost.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Job not found")
+        try:
+            doctor = DoctorProfile.objects.get(id=body.doctor_id)
+        except DoctorProfile.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Doctor not found")
+        if JobApplication.objects.filter(job=job, doctor=doctor).exists():
+            raise HTTPException(status_code=409, detail="Doctor already applied")
+        app = JobApplication.objects.create(
+            job=job, doctor=doctor, status='APPLIED',
+            metadata={"invited_by": str(current_user.id)},
+        )
+        return app
+
+    try:
+        app = await sync_to_async(_invite, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "application_id": str(app.id), "status": "INVITED"}

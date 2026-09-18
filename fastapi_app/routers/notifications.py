@@ -7,9 +7,10 @@ from pydantic import BaseModel, ConfigDict
 from fastapi_app.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["Notifications"])
+notif_prefs_router = APIRouter(prefix="/api/v1/notification-preferences", tags=["Notifications"])
 
 
-# ── Response Schemas ──────────────────────────────────────────
+# ── Schemas ───────────────────────────────────────────────────
 
 class NotificationOut(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {
@@ -30,9 +31,6 @@ class NotificationOut(BaseModel):
 
 
 class NotificationListResponse(BaseModel):
-    model_config = ConfigDict(json_schema_extra={"example": {
-        "total": 5, "page": 1, "page_size": 20, "unread_count": 3, "results": []
-    }})
     total: int
     page: int
     page_size: int
@@ -41,75 +39,67 @@ class NotificationListResponse(BaseModel):
 
 
 class UnreadCountResponse(BaseModel):
-    model_config = ConfigDict(json_schema_extra={"example": {"unread_count": 3}})
     unread_count: int
 
 
 class MarkReadResponse(BaseModel):
-    model_config = ConfigDict(json_schema_extra={"example": {
-        "success": True, "notification_id": "550e8400-e29b-41d4-a716-446655440000", "is_read": True
-    }})
     success: bool
     notification_id: str
     is_read: bool
 
 
 class MarkAllReadResponse(BaseModel):
-    model_config = ConfigDict(json_schema_extra={"example": {"success": True, "marked_read": 5}})
     success: bool
     marked_read: int
+
+
+DEFAULT_PREFS = {
+    "CONNECTION_REQUEST": {"in_app": True, "push": True},
+    "CONNECTION_ACCEPTED": {"in_app": True, "push": True},
+    "POST_INTERACTION": {"in_app": True, "push": True},
+    "NEW_MESSAGE": {"in_app": True, "push": True},
+    "RECOMMENDED_JOB": {"in_app": True, "push": True},
+    "APPLICATION_UPDATE": {"in_app": True, "push": True},
+    "INTERVIEW_UPDATE": {"in_app": True, "push": True},
+    "SHIFT_REQUEST": {"in_app": True, "push": True},
+    "SHIFT_ACCEPTED": {"in_app": True, "push": True},
+    "SHIFT_CONFIRMED": {"in_app": True, "push": True},
+    "SHIFT_CANCELLED": {"in_app": True, "push": True},
+    "VERIFICATION_UPDATE": {"in_app": True, "push": True},
+    "REPORT_UPDATE": {"in_app": True, "push": False},
+    "SUPPORT_UPDATE": {"in_app": True, "push": True},
+}
 
 
 # ── Helper ────────────────────────────────────────────────────
 
 def _notif_dict(n) -> NotificationOut:
     return NotificationOut(
-        id=str(n.id),
-        type=n.type,
-        title=n.title,
-        body=n.body,
-        data=n.data_json,
-        deep_link=n.deep_link,
-        is_read=n.is_read,
-        created_at=n.created_at.isoformat(),
+        id=str(n.id), type=n.type, title=n.title, body=n.body,
+        data=n.data_json, deep_link=n.deep_link,
+        is_read=n.is_read, created_at=n.created_at.isoformat(),
     )
 
 
-# ── Endpoints ─────────────────────────────────────────────────
+# ── Notification endpoints ────────────────────────────────────
 
-@router.get(
-    "/unread-count/",
-    response_model=UnreadCountResponse,
-    summary="Get unread notification count",
-)
+@router.get("/unread-count/", response_model=UnreadCountResponse)
 async def unread_count(current_user=Depends(get_current_user)):
-    """Returns the number of unread notifications for the authenticated user."""
     from apps.notifications.models import Notification
-
-    def _count():
-        return Notification.objects.filter(user=current_user, is_read=False).count()
-
-    count = await sync_to_async(_count, thread_sensitive=True)()
+    count = await sync_to_async(
+        lambda: Notification.objects.filter(user=current_user, is_read=False).count(),
+        thread_sensitive=True,
+    )()
     return UnreadCountResponse(unread_count=count)
 
 
-@router.get(
-    "/",
-    response_model=NotificationListResponse,
-    summary="List notifications",
-)
+@router.get("/", response_model=NotificationListResponse)
 async def list_notifications(
-    is_read: Optional[bool] = Query(None, description="Filter by read status"),
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Results per page"),
+    is_read: Optional[bool] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     current_user=Depends(get_current_user),
 ):
-    """
-    Returns paginated notifications for the authenticated user.
-
-    - **is_read**: optional filter — `true` for read, `false` for unread
-    - **page** / **page_size**: pagination controls
-    """
     from apps.notifications.models import Notification
 
     def _list():
@@ -123,50 +113,59 @@ async def list_notifications(
 
     total, unread, results = await sync_to_async(_list, thread_sensitive=True)()
     return NotificationListResponse(
-        total=total,
-        page=page,
-        page_size=page_size,
-        unread_count=unread,
-        results=[_notif_dict(n) for n in results],
+        total=total, page=page, page_size=page_size,
+        unread_count=unread, results=[_notif_dict(n) for n in results],
     )
 
 
-@router.patch(
-    "/{notification_id}/read/",
-    response_model=MarkReadResponse,
-    summary="Mark a notification as read",
-)
+@router.patch("/{notification_id}/read/", response_model=MarkReadResponse)
 async def mark_read(notification_id: str, current_user=Depends(get_current_user)):
-    """Marks a single notification as read. Returns 404 if not found or not owned by user."""
     from apps.notifications.models import Notification
     from django.utils import timezone
 
-    def _mark():
-        updated = Notification.objects.filter(
-            id=notification_id, user=current_user
-        ).update(is_read=True, read_at=timezone.now())
-        return updated
-
-    updated = await sync_to_async(_mark, thread_sensitive=True)()
+    updated = await sync_to_async(
+        lambda: Notification.objects.filter(id=notification_id, user=current_user)
+        .update(is_read=True, read_at=timezone.now()),
+        thread_sensitive=True,
+    )()
     if not updated:
         raise HTTPException(status_code=404, detail="Notification not found")
     return MarkReadResponse(success=True, notification_id=notification_id, is_read=True)
 
 
-@router.post(
-    "/read-all/",
-    response_model=MarkAllReadResponse,
-    summary="Mark all notifications as read",
-)
+@router.post("/read-all/", response_model=MarkAllReadResponse)
 async def mark_all_read(current_user=Depends(get_current_user)):
-    """Marks all unread notifications as read. Returns count of notifications marked."""
     from apps.notifications.models import Notification
     from django.utils import timezone
 
-    def _mark_all():
-        return Notification.objects.filter(user=current_user, is_read=False).update(
-            is_read=True, read_at=timezone.now()
-        )
-
-    count = await sync_to_async(_mark_all, thread_sensitive=True)()
+    count = await sync_to_async(
+        lambda: Notification.objects.filter(user=current_user, is_read=False)
+        .update(is_read=True, read_at=timezone.now()),
+        thread_sensitive=True,
+    )()
     return MarkAllReadResponse(success=True, marked_read=count)
+
+
+# ── Notification Preferences ──────────────────────────────────
+
+@notif_prefs_router.get("/", summary="Get per-event notification preferences")
+async def get_notification_preferences(current_user=Depends(get_current_user)):
+    prefs = current_user.metadata.get("notification_preferences", DEFAULT_PREFS)
+    return {"preferences": prefs}
+
+
+class NotifPrefsUpdate(BaseModel):
+    preferences: Dict[str, Any]
+
+
+@notif_prefs_router.put("/", summary="Update notification preferences")
+async def update_notification_preferences(
+    body: NotifPrefsUpdate,
+    current_user=Depends(get_current_user),
+):
+    def _update():
+        current_user.metadata["notification_preferences"] = body.preferences
+        current_user.save(update_fields=["metadata"])
+
+    await sync_to_async(_update, thread_sensitive=True)()
+    return {"success": True, "preferences": body.preferences}

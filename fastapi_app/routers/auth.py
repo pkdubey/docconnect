@@ -284,3 +284,241 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
     await sync_to_async(_blacklist, thread_sensitive=True)()
     return LogoutResponse(success=True, message="Logged out")
+
+
+class ForgotPasswordRequest(BaseModel):
+    phone: str = Field(..., pattern=r'^[6-9]\d{9}$')
+
+
+class ResetPasswordRequest(BaseModel):
+    phone: str = Field(..., pattern=r'^[6-9]\d{9}$')
+    otp: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=8)
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str = Field(..., min_length=8)
+
+
+@router.post("/password/forgot/", response_model=OTPSendResponse)
+async def forgot_password(request: ForgotPasswordRequest):
+    import hashlib, secrets
+    from django.utils import timezone
+    from datetime import timedelta
+    from apps.accounts.models import OTPChallenge
+    from django.contrib.auth import get_user_model
+
+    def _create_otp():
+        User = get_user_model()
+        if not User.objects.filter(phone=request.phone).exists():
+            return None, "not_found"
+        otp = str(secrets.randbelow(900000) + 100000)
+        otp_hash = hashlib.sha256(otp.encode()).hexdigest()
+        OTPChallenge.objects.create(
+            phone=request.phone, purpose='RESET_PASSWORD',
+            otp_hash=otp_hash, expires_at=timezone.now() + timedelta(seconds=300),
+        )
+        return otp, "ok"
+
+    otp, result = await sync_to_async(_create_otp, thread_sensitive=True)()
+    if result == "not_found":
+        # Return success to prevent phone enumeration
+        return OTPSendResponse(success=True, message="If account exists, OTP sent", expires_in=300)
+
+    from django.conf import settings
+    response = {"success": True, "message": "OTP sent", "expires_in": 300}
+    if getattr(settings, 'DEBUG', False) or not getattr(settings, 'SMS_API_KEY', ''):
+        response["otp"] = otp
+        response["message"] = "OTP generated (dev mode)"
+    return OTPSendResponse(**response)
+
+
+@router.post("/password/reset/", response_model=LogoutResponse)
+async def reset_password(request: ResetPasswordRequest):
+    import hashlib
+    from django.utils import timezone
+    from django.contrib.auth import get_user_model
+    from apps.accounts.models import OTPChallenge
+
+    def _reset():
+        challenge = OTPChallenge.objects.filter(
+            phone=request.phone, purpose='RESET_PASSWORD',
+            consumed_at__isnull=True, expires_at__gt=timezone.now(),
+        ).order_by('-created_at').first()
+        if not challenge:
+            raise HTTPException(status_code=400, detail="No valid OTP found")
+        if challenge.otp_hash != hashlib.sha256(request.otp.encode()).hexdigest():
+            challenge.attempts += 1
+            challenge.save(update_fields=['attempts'])
+            raise HTTPException(status_code=400, detail="Invalid OTP")
+        challenge.consumed_at = timezone.now()
+        challenge.save(update_fields=['consumed_at'])
+        User = get_user_model()
+        try:
+            user = User.objects.get(phone=request.phone)
+        except User.DoesNotExist:
+            raise HTTPException(status_code=404, detail="User not found")
+        user.set_password(request.new_password)
+        user.save(update_fields=['password'])
+
+    try:
+        await sync_to_async(_reset, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return LogoutResponse(success=True, message="Password reset successfully")
+
+
+@router.post("/password/change/", response_model=LogoutResponse)
+async def change_password(
+    request: ChangePasswordRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    from rest_framework_simplejwt.tokens import AccessToken
+    from rest_framework_simplejwt.exceptions import TokenError
+    from django.contrib.auth import get_user_model
+
+    def _change():
+        try:
+            token = AccessToken(credentials.credentials)
+            user_id = token['user_id']
+        except TokenError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        User = get_user_model()
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not user.check_password(request.old_password):
+            raise HTTPException(status_code=400, detail="Old password is incorrect")
+        user.set_password(request.new_password)
+        user.save(update_fields=['password'])
+
+    try:
+        await sync_to_async(_change, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return LogoutResponse(success=True, message="Password changed successfully")
+
+
+@router.get("/sessions/")
+async def list_sessions(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    from rest_framework_simplejwt.tokens import AccessToken
+    from rest_framework_simplejwt.exceptions import TokenError
+    from apps.accounts.models import RefreshSession
+    from django.utils import timezone
+
+    def _list():
+        try:
+            token = AccessToken(credentials.credentials)
+            user_id = token['user_id']
+        except TokenError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        sessions = list(RefreshSession.objects.filter(
+            user_id=user_id, revoked_at__isnull=True, expires_at__gt=timezone.now()
+        ).order_by('-created_at'))
+        return sessions
+
+    try:
+        sessions = await sync_to_async(_list, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {
+        "sessions": [{"id": str(s.id), "device_name": s.device_name,
+                      "ip_address": s.ip_address, "created_at": s.created_at.isoformat()} for s in sessions]
+    }
+
+
+@router.delete("/sessions/{session_id}/", response_model=LogoutResponse)
+async def revoke_session(session_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    from rest_framework_simplejwt.tokens import AccessToken
+    from rest_framework_simplejwt.exceptions import TokenError
+    from apps.accounts.models import RefreshSession
+    from django.utils import timezone
+
+    def _revoke():
+        try:
+            token = AccessToken(credentials.credentials)
+            user_id = token['user_id']
+        except TokenError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        updated = RefreshSession.objects.filter(id=session_id, user_id=user_id).update(revoked_at=timezone.now())
+        if not updated:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+    try:
+        await sync_to_async(_revoke, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return LogoutResponse(success=True, message="Session revoked")
+
+
+@router.post("/sessions/revoke-all/", response_model=LogoutResponse)
+async def revoke_all_sessions(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    from rest_framework_simplejwt.tokens import AccessToken
+    from rest_framework_simplejwt.exceptions import TokenError
+    from apps.accounts.models import RefreshSession
+    from django.utils import timezone
+
+    def _revoke_all():
+        try:
+            token = AccessToken(credentials.credentials)
+            user_id = token['user_id']
+        except TokenError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        RefreshSession.objects.filter(user_id=user_id, revoked_at__isnull=True).update(revoked_at=timezone.now())
+
+    try:
+        await sync_to_async(_revoke_all, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return LogoutResponse(success=True, message="All sessions revoked")
+
+
+@router.delete("/account/", response_model=LogoutResponse, include_in_schema=False)
+async def delete_account_auth_alias(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Alias — kept for backward compat. Use DELETE /api/v1/account/ instead."""
+    return await _delete_account_impl(credentials)
+
+
+async def _delete_account_impl(credentials: HTTPAuthorizationCredentials):
+    from rest_framework_simplejwt.tokens import AccessToken
+    from rest_framework_simplejwt.exceptions import TokenError
+    from django.contrib.auth import get_user_model
+
+    def _delete():
+        try:
+            token = AccessToken(credentials.credentials)
+            user_id = token['user_id']
+        except TokenError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        User = get_user_model()
+        User.objects.filter(id=user_id).update(status='DELETED', is_active=False)
+        # Cascade: withdraw active job applications
+        try:
+            from apps.doctors.models import DoctorProfile
+            from apps.jobs.models import JobApplication
+            dp = DoctorProfile.objects.filter(user_id=user_id).first()
+            if dp:
+                JobApplication.objects.filter(
+                    doctor=dp,
+                    status__in=('APPLIED', 'PROFILE_VIEWED', 'SHORTLISTED', 'INTERVIEW', 'OFFERED')
+                ).update(status='WITHDRAWN')
+                # Deactivate availabilities
+                from apps.availability.models import DoctorAvailability
+                DoctorAvailability.objects.filter(doctor=dp, is_active=True).update(is_active=False)
+                # Cancel pending shift requests
+                from apps.shifts.models import ShiftRequest
+                from django.utils import timezone
+                ShiftRequest.objects.filter(
+                    doctor=dp,
+                    status__in=('REQUESTED', 'ACCEPTED_BY_DOCTOR')
+                ).update(status='CANCELLED', cancelled_at=timezone.now())
+        except Exception:
+            pass
+
+    try:
+        await sync_to_async(_delete, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return LogoutResponse(success=True, message="Account deactivated")

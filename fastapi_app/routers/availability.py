@@ -156,16 +156,69 @@ async def list_my_availabilities(
     return [_avail_dict(a) for a in availabilities]
 
 
+class AvailabilityUpdate(BaseModel):
+    available_from: Optional[date] = None
+    available_until: Optional[date] = None
+    preferred_location: Optional[Location] = None
+    preferred_radius_km: Optional[int] = Field(None, ge=1, le=500)
+    minimum_compensation: Optional[Decimal] = Field(None, ge=0)
+    currency: Optional[str] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@router.patch("/{availability_id}/", response_model=AvailabilityOut, summary="Update availability")
+async def update_availability(availability_id: str, data: AvailabilityUpdate, current_doctor=Depends(get_current_doctor)):
+    from apps.availability.models import DoctorAvailability
+
+    def _update():
+        try:
+            avail = DoctorAvailability.objects.get(id=availability_id, doctor=current_doctor)
+        except DoctorAvailability.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Availability not found")
+        for field, value in data.model_dump(exclude_none=True).items():
+            if field == 'preferred_location' and value:
+                value = data.preferred_location.model_dump()
+            setattr(avail, field, value)
+        avail.save()
+        return avail
+
+    try:
+        avail = await sync_to_async(_update, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return _avail_dict(avail)
+
+
 @router.delete("/{availability_id}/", status_code=204, summary="Deactivate availability")
 async def deactivate_availability(availability_id: str, current_doctor=Depends(get_current_doctor)):
     from apps.availability.models import DoctorAvailability
+    from apps.shifts.models import ShiftRequest
 
-    updated = await sync_to_async(
-        lambda: DoctorAvailability.objects.filter(id=availability_id, doctor=current_doctor).update(is_active=False),
-        thread_sensitive=True,
-    )()
-    if not updated:
-        raise HTTPException(status_code=404, detail="Availability not found")
+    def _deactivate():
+        try:
+            avail = DoctorAvailability.objects.get(id=availability_id, doctor=current_doctor)
+        except DoctorAvailability.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Availability not found")
+        # Warn if there are pending/accepted shift requests linked to this availability's slots
+        active_requests = ShiftRequest.objects.filter(
+            doctor=current_doctor,
+            status__in=('REQUESTED', 'ACCEPTED_BY_DOCTOR', 'CONFIRMED_BY_HOSPITAL'),
+            requirement__requirement_date__gte=avail.available_from,
+            requirement__requirement_date__lte=avail.available_until,
+        ).exists()
+        if active_requests:
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot deactivate availability with pending or confirmed shift requests. Cancel those shifts first."
+            )
+        avail.is_active = False
+        avail.save(update_fields=['is_active'])
+
+    try:
+        await sync_to_async(_deactivate, thread_sensitive=True)()
+    except HTTPException:
+        raise
 
 
 @router.get("/{availability_id}/slots/", response_model=List[SlotOut], summary="List slots for an availability")
@@ -181,3 +234,105 @@ async def list_slots(availability_id: str, current_user=Depends(get_current_user
     return [SlotOut(id=str(s.id), slot_date=str(s.slot_date),
                     start_time=str(s.start_time), end_time=str(s.end_time),
                     is_booked=s.is_booked) for s in slots]
+
+
+@router.post("/{availability_id}/slots/", response_model=SlotOut, status_code=201, summary="Add slot to availability")
+async def add_slot(availability_id: str, slot: SlotCreate, current_doctor=Depends(get_current_doctor)):
+    from apps.availability.models import AvailabilitySlot, DoctorAvailability
+    from apps.shifts.models import ShiftRequest
+
+    def _create():
+        try:
+            avail = DoctorAvailability.objects.get(id=availability_id, doctor=current_doctor)
+        except DoctorAvailability.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Availability not found")
+        # Overlap check: flag if doctor has a confirmed/accepted shift on this date+time
+        overlap = ShiftRequest.objects.filter(
+            doctor=current_doctor,
+            status__in=('ACCEPTED_BY_DOCTOR', 'CONFIRMED_BY_HOSPITAL'),
+            requirement__requirement_date=slot.slot_date,
+            requirement__start_time__lt=slot.end_time,
+            requirement__end_time__gt=slot.start_time,
+        ).exists()
+        if overlap:
+            raise HTTPException(
+                status_code=409,
+                detail="Slot overlaps with an accepted or confirmed shift on this date."
+            )
+        return AvailabilitySlot.objects.create(
+            availability=avail, slot_date=slot.slot_date,
+            start_time=slot.start_time, end_time=slot.end_time,
+        )
+
+    try:
+        s = await sync_to_async(_create, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return SlotOut(id=str(s.id), slot_date=str(s.slot_date),
+                   start_time=str(s.start_time), end_time=str(s.end_time), is_booked=s.is_booked)
+
+
+@router.patch("/slots/{slot_id}/", response_model=SlotOut, summary="Update a slot")
+async def update_slot(slot_id: str, slot: SlotCreate, current_doctor=Depends(get_current_doctor)):
+    from apps.availability.models import AvailabilitySlot
+
+    def _update():
+        try:
+            s = AvailabilitySlot.objects.select_related('availability').get(
+                id=slot_id, availability__doctor=current_doctor
+            )
+        except AvailabilitySlot.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Slot not found")
+        s.slot_date = slot.slot_date
+        s.start_time = slot.start_time
+        s.end_time = slot.end_time
+        s.save(update_fields=['slot_date', 'start_time', 'end_time'])
+        return s
+
+    try:
+        s = await sync_to_async(_update, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return SlotOut(id=str(s.id), slot_date=str(s.slot_date),
+                   start_time=str(s.start_time), end_time=str(s.end_time), is_booked=s.is_booked)
+
+
+@router.delete("/slots/{slot_id}/", status_code=204, summary="Delete a slot")
+async def delete_slot(slot_id: str, current_doctor=Depends(get_current_doctor)):
+    from apps.availability.models import AvailabilitySlot
+
+    deleted = await sync_to_async(
+        lambda: AvailabilitySlot.objects.filter(
+            id=slot_id, availability__doctor=current_doctor
+        ).delete()[0],
+        thread_sensitive=True,
+    )()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Slot not found")
+
+
+class AvailabilityPreferences(BaseModel):
+    preferred_availability_types: Optional[List[str]] = None
+    preferred_radius_km: Optional[int] = Field(None, ge=1, le=500)
+    minimum_compensation: Optional[Decimal] = Field(None, ge=0)
+    currency: str = "INR"
+    auto_accept: bool = False
+
+
+@router.get("/preferences/", summary="Get availability preferences")
+async def get_availability_preferences(current_doctor=Depends(get_current_doctor)):
+    prefs = current_doctor.metadata.get('availability_preferences', {})
+    return {"preferences": prefs}
+
+
+@router.put("/preferences/", summary="Update availability preferences")
+async def update_availability_preferences(
+    body: AvailabilityPreferences,
+    current_doctor=Depends(get_current_doctor),
+):
+    def _update():
+        current_doctor.metadata['availability_preferences'] = body.model_dump()
+        current_doctor.save(update_fields=['metadata'])
+
+    await sync_to_async(_update, thread_sensitive=True)()
+    return {"success": True, "preferences": body.model_dump()}

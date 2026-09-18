@@ -10,8 +10,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from a2wsgi import WSGIMiddleware
 
-from fastapi_app.routers import auth, doctors, hospitals, jobs, availability, shifts, messaging, notifications, feed
+from fastapi_app.routers import (
+    auth, doctors, hospitals, jobs, availability, shifts,
+    messaging, notifications, feed, network, search, communities, admin, devices,
+    files, masters, support, billing
+)
 from fastapi_app.middleware.logging import LoggingMiddleware
+from fastapi import APIRouter as _APIRouter, Depends as _Depends
+from fastapi.security import HTTPBearer as _HTTPBearer, HTTPAuthorizationCredentials as _HTTPAuthCreds
+_account_security = _HTTPBearer()
+_account_router = _APIRouter(prefix="/api/v1", tags=["Account"])
+
+
+@_account_router.delete("/account/")
+async def delete_account(credentials: _HTTPAuthCreds = _Depends(_account_security)):
+    return await auth._delete_account_impl(credentials)
 
 app = FastAPI(
     title="DocConnect API",
@@ -66,6 +79,8 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(_account_router)
+app.include_router(jobs.applications_router)
 app.include_router(doctors.router)
 app.include_router(hospitals.router)
 app.include_router(jobs.router)
@@ -73,7 +88,18 @@ app.include_router(availability.router)
 app.include_router(shifts.router)
 app.include_router(messaging.router)
 app.include_router(notifications.router)
+app.include_router(notifications.notif_prefs_router)
 app.include_router(feed.router)
+app.include_router(network.router)
+app.include_router(network.reports_router)
+app.include_router(search.router)
+app.include_router(communities.router)
+app.include_router(admin.router)
+app.include_router(devices.router)
+app.include_router(files.router)
+app.include_router(masters.router)
+app.include_router(support.router)
+app.include_router(billing.router)
 
 
 @app.get("/health")

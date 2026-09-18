@@ -244,6 +244,7 @@ async def my_shift_requests(current_doctor=Depends(get_current_doctor)):
 @router.post("/requirements/{requirement_id}/request/", response_model=ShiftActionOut, status_code=201, summary="Doctor requests a shift")
 async def request_shift(requirement_id: str, current_doctor=Depends(get_current_doctor)):
     from apps.shifts.models import ShiftRequirement, ShiftRequest
+    from apps.availability.models import DoctorAvailability
 
     def _create():
         try:
@@ -252,6 +253,25 @@ async def request_shift(requirement_id: str, current_doctor=Depends(get_current_
             raise HTTPException(status_code=404, detail="Shift requirement not found or not open")
         if ShiftRequest.objects.filter(requirement=req, doctor=current_doctor).exists():
             raise HTTPException(status_code=409, detail="Already requested this shift")
+        # Check doctor has active availability covering this requirement
+        has_avail = DoctorAvailability.objects.filter(
+            doctor=current_doctor,
+            is_active=True,
+            available_from__lte=req.requirement_date,
+            available_until__gte=req.requirement_date,
+        ).exists()
+        if not has_avail:
+            raise HTTPException(status_code=409, detail="No active availability covering this shift date")
+        # Overlap check: reject if already confirmed/accepted on same date+time
+        overlap = ShiftRequest.objects.filter(
+            doctor=current_doctor,
+            status__in=('ACCEPTED_BY_DOCTOR', 'CONFIRMED_BY_HOSPITAL'),
+            requirement__requirement_date=req.requirement_date,
+            requirement__start_time__lt=req.end_time,
+            requirement__end_time__gt=req.start_time,
+        ).exists()
+        if overlap:
+            raise HTTPException(status_code=409, detail="Overlapping shift already accepted or confirmed")
         return ShiftRequest.objects.create(requirement=req, doctor=current_doctor)
 
     try:
@@ -440,3 +460,85 @@ async def matched_doctors(requirement_id: str, current_user=Depends(get_current_
     except HTTPException:
         raise
     return MatchedDoctorsResponse(total=len(result), matched_doctors=result)
+
+
+# ── PATCH Shift Requirement ───────────────────────────────────
+
+class ShiftRequirementUpdate(BaseModel):
+    doctors_required: Optional[int] = Field(None, ge=1)
+    urgency: Optional[str] = Field(None, pattern=r'^(NORMAL|URGENT|IMMEDIATE)$')
+    notes: Optional[str] = None
+    compensation: Optional[Decimal] = Field(None, ge=0)
+
+
+@router.patch("/requirements/{requirement_id}/", response_model=ShiftRequirementOut, summary="Update shift requirement")
+async def update_shift_requirement(
+    requirement_id: str,
+    body: ShiftRequirementUpdate,
+    current_user=Depends(get_current_user),
+):
+    from apps.hospitals.models import HospitalUser
+    from apps.shifts.models import ShiftRequirement
+
+    def _update():
+        try:
+            hu = HospitalUser.objects.get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not associated with a hospital")
+        try:
+            req = ShiftRequirement.objects.get(id=requirement_id, hospital=hu.hospital)
+        except ShiftRequirement.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Requirement not found")
+        for field, value in body.model_dump(exclude_none=True).items():
+            setattr(req, field, value)
+        req.save()
+        return req
+
+    try:
+        req = await sync_to_async(_update, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return _req_dict(req)
+
+
+# ── POST match (alias for matched-doctors) ────────────────────
+
+@router.post("/requirements/{requirement_id}/match/", response_model=MatchedDoctorsResponse, summary="Get matched doctors (POST)")
+async def match_doctors_post(requirement_id: str, current_user=Depends(get_current_user)):
+    """Alias POST endpoint — same logic as GET matched-doctors."""
+    return await matched_doctors(requirement_id, current_user)
+
+
+# ── Shift Request History ─────────────────────────────────────
+
+@router.get("/requests/{request_id}/history/", summary="Shift request state history")
+async def shift_request_history(request_id: str, current_user=Depends(get_current_user)):
+    from apps.shifts.models import ShiftRequest
+
+    def _get():
+        try:
+            sr = ShiftRequest.objects.get(id=request_id)
+        except ShiftRequest.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Shift request not found")
+        return sr
+
+    try:
+        sr = await sync_to_async(_get, thread_sensitive=True)()
+    except HTTPException:
+        raise
+
+    history = [
+        {"status": "REQUESTED", "timestamp": sr.requested_at.isoformat() if sr.requested_at else None},
+    ]
+    if sr.accepted_at:
+        history.append({"status": "ACCEPTED_BY_DOCTOR", "timestamp": sr.accepted_at.isoformat()})
+    if sr.declined_at:
+        history.append({"status": "DECLINED_BY_DOCTOR", "timestamp": sr.declined_at.isoformat()})
+    if sr.confirmed_at:
+        history.append({"status": "CONFIRMED_BY_HOSPITAL", "timestamp": sr.confirmed_at.isoformat()})
+    if sr.completed_at:
+        history.append({"status": "COMPLETED", "timestamp": sr.completed_at.isoformat()})
+    if sr.cancelled_at:
+        history.append({"status": "CANCELLED", "timestamp": sr.cancelled_at.isoformat()})
+
+    return {"request_id": request_id, "current_status": sr.status, "history": history}

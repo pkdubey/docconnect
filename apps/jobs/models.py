@@ -90,6 +90,7 @@ class JobApplication(models.Model):
     doctor = models.ForeignKey('doctors.DoctorProfile', on_delete=models.CASCADE, related_name='applications')
     cv_file_id = models.UUIDField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default='APPLIED')
+    metadata = models.JSONField(default=dict, blank=True)
     applied_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -116,3 +117,18 @@ class ApplicationHistory(models.Model):
 
     def __str__(self):
         return f"{self.from_status} → {self.to_status}"
+
+
+class JobSave(models.Model):
+    """Doctor saves a job for later."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    doctor = models.ForeignKey('doctors.DoctorProfile', on_delete=models.CASCADE, related_name='saved_jobs')
+    job = models.ForeignKey(JobPost, on_delete=models.CASCADE, related_name='saves')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'job_saves'
+        unique_together = ('doctor', 'job')
+
+    def __str__(self):
+        return f"{self.doctor} saved {self.job.title}"

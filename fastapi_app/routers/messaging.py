@@ -193,3 +193,63 @@ async def send_message(conversation_id: str, data: MessageCreate, current_user=D
     except HTTPException:
         raise
     return SendMessageOut(id=str(msg.id), created_at=msg.created_at.isoformat())
+
+
+@router.post("/conversations/{conversation_id}/read/", summary="Mark conversation as read")
+async def mark_conversation_read(conversation_id: str, current_user=Depends(get_current_user)):
+    from apps.messaging.models import ConversationParticipant
+    from django.utils import timezone
+
+    updated = await sync_to_async(
+        lambda: ConversationParticipant.objects.filter(
+            conversation_id=conversation_id, user=current_user
+        ).update(last_read_at=timezone.now()),
+        thread_sensitive=True,
+    )()
+    if not updated:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"success": True}
+
+
+@router.post("/conversations/{conversation_id}/report/", status_code=201, summary="Report a conversation")
+async def report_conversation(conversation_id: str, reason: str = "SPAM", current_user=Depends(get_current_user)):
+    import uuid
+    def _report():
+        reports = current_user.metadata.get("submitted_reports", [])
+        reports.append({
+            "id": str(uuid.uuid4()), "target_type": "CONVERSATION",
+            "target_id": conversation_id, "reason": reason, "status": "SUBMITTED",
+        })
+        current_user.metadata["submitted_reports"] = reports
+        current_user.save(update_fields=["metadata"])
+
+    await sync_to_async(_report, thread_sensitive=True)()
+    return {"success": True, "message": "Conversation reported"}
+
+
+@router.post("/conversations/{conversation_id}/block/", status_code=201, summary="Block a conversation")
+async def block_conversation(conversation_id: str, current_user=Depends(get_current_user)):
+    from apps.messaging.models import ConversationParticipant
+
+    updated = await sync_to_async(
+        lambda: ConversationParticipant.objects.filter(
+            conversation_id=conversation_id, user=current_user
+        ).update(is_active=False),
+        thread_sensitive=True,
+    )()
+    if not updated:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"success": True, "message": "Conversation blocked"}
+
+
+@router.delete("/conversations/{conversation_id}/block/", summary="Unblock a conversation")
+async def unblock_conversation(conversation_id: str, current_user=Depends(get_current_user)):
+    from apps.messaging.models import ConversationParticipant
+
+    await sync_to_async(
+        lambda: ConversationParticipant.objects.filter(
+            conversation_id=conversation_id, user=current_user
+        ).update(is_active=True),
+        thread_sensitive=True,
+    )()
+    return {"success": True, "message": "Conversation unblocked"}

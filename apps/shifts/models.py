@@ -71,3 +71,21 @@ class ShiftRequest(models.Model):
 
     def __str__(self):
         return f"{self.doctor} → {self.requirement} ({self.status})"
+
+
+class ShiftStatusHistory(models.Model):
+    """Immutable audit trail for every shift request state transition."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    shift_request = models.ForeignKey(ShiftRequest, on_delete=models.CASCADE, related_name='status_history')
+    from_status = models.CharField(max_length=30, null=True, blank=True)
+    to_status = models.CharField(max_length=30)
+    changed_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'shift_status_history'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.from_status} → {self.to_status}"

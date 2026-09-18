@@ -40,6 +40,27 @@ def _resolve_author(user):
     return name, photo
 
 
+# ── PII Detection ────────────────────────────────────────────
+
+import re
+
+_PII_PATTERNS = [
+    re.compile(r'\b\d{12}\b'),                          # Aadhaar (12-digit)
+    re.compile(r'\b[6-9]\d{9}\b'),                      # Indian mobile number
+    re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}'),  # email
+    re.compile(r'\bPT\d{6,}\b', re.IGNORECASE),         # patient ID pattern
+    re.compile(r'\bIPD[\-/]?\d{4,}\b', re.IGNORECASE),  # IPD number
+]
+
+
+def _detect_pii(text: str) -> bool:
+    """Return True if text contains likely PII."""
+    for pattern in _PII_PATTERNS:
+        if pattern.search(text):
+            return True
+    return False
+
+
 # ── Schemas ───────────────────────────────────────────────────
 
 class StatsOut(BaseModel):
@@ -127,6 +148,7 @@ class PostOut(BaseModel):
     comment_count: int
     liked: bool
     is_mine: bool
+    pii_flagged: bool
     created_at: str
 
 
@@ -144,6 +166,7 @@ class CreatePostResponse(BaseModel):
     post_type: str
     content: str
     image: Optional[str]
+    pii_flagged: bool
     created_at: str
 
 
@@ -400,6 +423,7 @@ async def get_feed(
             comment_count=p.comments.filter(parent__isnull=True).count(),
             liked=str(p.id) in liked_ids,
             is_mine=p.posted_by_id == current_user.id,
+            pii_flagged=getattr(p, 'pii_flagged', False),
             created_at=p.created_at.strftime('%b %d'),
         ))
 
@@ -418,6 +442,7 @@ async def create_post(
     content: str = Form(..., description="Post text content"),
     post_type: str = Form("UPDATE", description="UPDATE | CASE | ARTICLE | PHOTO"),
     is_anonymous: bool = Form(False, description="Post anonymously — doctors only, CASE type"),
+    patient_privacy_confirmed: bool = Form(False, description="Required for CASE posts — confirms no patient PII included"),
     image: Optional[UploadFile] = File(None, description="Optional image (JPEG/PNG/WEBP, max 5MB)"),
     current_user=Depends(get_current_user),
 ):
@@ -426,6 +451,7 @@ async def create_post(
 
     - **post_type**: `UPDATE` (default) | `CASE` | `ARTICLE` | `PHOTO`
     - **is_anonymous**: only for `CASE` posts by doctors
+    - **patient_privacy_confirmed**: required `true` for `CASE` posts
     """
     import base64
     from apps.doctors.models import Post
@@ -434,8 +460,18 @@ async def create_post(
         raise HTTPException(status_code=400, detail="Content is required")
     if post_type not in ('UPDATE', 'CASE', 'ARTICLE', 'PHOTO'):
         post_type = 'UPDATE'
+    if post_type == 'CASE' and not patient_privacy_confirmed:
+        raise HTTPException(status_code=400, detail="Patient privacy confirmation required for clinical case posts")
     if is_anonymous and current_user.user_type != 'DOCTOR':
         is_anonymous = False
+
+    # PII detection
+    pii_flagged = _detect_pii(content.strip())
+    if pii_flagged and post_type == 'CASE':
+        raise HTTPException(
+            status_code=400,
+            detail="Potential patient PII detected (phone/Aadhaar/email/patient ID). Remove before posting."
+        )
 
     image_base64 = None
     if image:
@@ -460,6 +496,8 @@ async def create_post(
             content=content.strip(),
             image_base64=image_base64,
             is_anonymous=is_anonymous,
+            patient_privacy_confirmed=patient_privacy_confirmed,
+            pii_flagged=pii_flagged,
         )
 
     try:
@@ -474,6 +512,7 @@ async def create_post(
         post_type=post.get_post_type_display(),
         content=post.content,
         image=post.image_base64 or None,
+        pii_flagged=post.pii_flagged,
         created_at='Just now',
     )
 

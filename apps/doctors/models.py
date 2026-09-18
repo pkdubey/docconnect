@@ -48,6 +48,8 @@ class DoctorProfile(models.Model):
     career_visibility = models.CharField(
         max_length=20, choices=CAREER_VISIBILITY, default='VERIFIED_HOSPITALS'
     )
+    languages = models.JSONField(default=list, blank=True)          # e.g. ["English", "Hindi"]
+    career_preferences = models.JSONField(default=dict, blank=True)  # job_types, locations, etc.
     search_vector = SearchVectorField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -181,6 +183,9 @@ class Post(models.Model):
     content = models.TextField()
     image_base64 = models.TextField(null=True, blank=True)
     is_anonymous = models.BooleanField(default=False)  # for case discussions
+    patient_privacy_confirmed = models.BooleanField(default=False)  # CASE posts must confirm
+    pii_flagged = models.BooleanField(default=False)   # auto-flagged if PII detected
+    metadata = models.JSONField(default=dict, blank=True)  # e.g. {"community_id": "..."}
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -241,3 +246,53 @@ class PostComment(models.Model):
 
     def __str__(self):
         return f"{self.author} on {self.post_id}"
+
+
+class DoctorAffiliation(models.Model):
+    """Hospital affiliations — current and past."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    doctor = models.ForeignKey(DoctorProfile, on_delete=models.CASCADE, related_name='affiliations')
+    hospital_name = models.CharField(max_length=255)
+    hospital_id = models.UUIDField(null=True, blank=True)  # FK to Hospital if on platform
+    role = models.CharField(max_length=100, null=True, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    is_current = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'doctor_affiliations'
+
+    def __str__(self):
+        return f"{self.doctor} @ {self.hospital_name}"
+
+
+class Follow(models.Model):
+    """Doctor-to-doctor or doctor-to-hospital follows."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    follower = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='following')
+    following = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='followers')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'follows'
+        unique_together = ('follower', 'following')
+
+    def __str__(self):
+        return f"{self.follower_id} → {self.following_id}"
+
+
+class Block(models.Model):
+    """User-level block relationship."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    blocker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='blocks_made')
+    blocked = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='blocked_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'blocks'
+        unique_together = ('blocker', 'blocked')
+
+    def __str__(self):
+        return f"{self.blocker_id} blocked {self.blocked_id}"

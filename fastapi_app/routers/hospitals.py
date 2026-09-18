@@ -371,3 +371,260 @@ async def upload_logo(file: UploadFile = File(...), current_user=Depends(get_cur
         hu.hospital.save(update_fields=['logo_file_id'])
     ), thread_sensitive=True)()
     return LogoUploadOut(success=True, file_id=str(file_id))
+
+
+class HospitalUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=3, max_length=255)
+    about: Optional[str] = None
+    location: Optional[Location] = None
+    bed_count: Optional[int] = Field(None, ge=1)
+    hospital_phone: Optional[str] = None
+    hospital_email: Optional[EmailStr] = None
+    website: Optional[str] = None
+
+
+@router.patch("/me/", response_model=HospitalOut, summary="Update hospital profile")
+async def update_hospital(data: HospitalUpdate, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+
+    def _update():
+        try:
+            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        h = hu.hospital
+        if data.name:
+            h.name = data.name
+        if data.about is not None:
+            h.about = data.about
+        if data.location:
+            h.location = data.location.model_dump()
+        if data.bed_count is not None:
+            h.bed_count = data.bed_count
+        if data.hospital_phone is not None:
+            h.phone = data.hospital_phone
+        if data.hospital_email is not None:
+            h.email = str(data.hospital_email)
+        if data.website is not None:
+            h.website = data.website
+        h.save()
+        return h
+
+    try:
+        hospital = await sync_to_async(_update, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return _hospital_dict(hospital)
+
+
+@router.post("/me/verification/submit/", summary="Submit hospital verification documents")
+async def submit_hospital_verification(current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+
+    def _submit():
+        try:
+            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        h = hu.hospital
+        if h.verification_status not in ('UNVERIFIED', 'REJECTED'):
+            raise HTTPException(status_code=400, detail=f"Cannot submit from status: {h.verification_status}")
+        h.verification_status = 'PENDING'
+        h.save(update_fields=['verification_status'])
+        return h
+
+    try:
+        h = await sync_to_async(_submit, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "verification_status": "PENDING", "hospital_id": str(h.id)}
+
+
+@router.get("/me/verification/", summary="Get hospital verification status")
+async def get_hospital_verification(current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+
+    def _get():
+        try:
+            hu = HospitalUser.objects.select_related('hospital').get(user=current_user)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=404, detail="No hospital found")
+        return hu.hospital
+
+    try:
+        h = await sync_to_async(_get, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"verification_status": h.verification_status, "verified_at": h.verified_at.isoformat() if h.verified_at else None}
+
+
+@router.get("/{hospital_id}/", response_model=HospitalOut, summary="View public hospital profile")
+async def get_hospital_public(hospital_id: str, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import Hospital
+
+    def _get():
+        try:
+            return Hospital.objects.get(id=hospital_id, verification_status='VERIFIED')
+        except Hospital.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Hospital not found")
+
+    try:
+        h = await sync_to_async(_get, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return _hospital_dict(h)
+
+
+# ── Branch PATCH / DELETE ─────────────────────────────────────
+
+@router.patch("/me/branches/{branch_id}/", response_model=BranchOut, summary="Update branch")
+async def update_branch(branch_id: str, branch: HospitalBranchCreate, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalBranch, HospitalUser
+
+    def _update():
+        try:
+            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        try:
+            b = HospitalBranch.objects.get(id=branch_id, hospital=hu.hospital)
+        except HospitalBranch.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Branch not found")
+        b.name = branch.name
+        b.location = branch.location.model_dump()
+        if branch.phone is not None:
+            b.phone = branch.phone
+        b.is_primary = branch.is_primary
+        b.save()
+        return b
+
+    try:
+        b = await sync_to_async(_update, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return BranchOut(id=str(b.id), name=b.name, location=b.location or {}, phone=b.phone, is_primary=b.is_primary)
+
+
+@router.delete("/me/branches/{branch_id}/", status_code=204, summary="Deactivate branch")
+async def delete_branch(branch_id: str, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalBranch, HospitalUser
+
+    def _delete():
+        try:
+            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        deleted = HospitalBranch.objects.filter(id=branch_id, hospital=hu.hospital).delete()[0]
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Branch not found")
+
+    try:
+        await sync_to_async(_delete, thread_sensitive=True)()
+    except HTTPException:
+        raise
+
+
+# ── Hospital Users CRUD ───────────────────────────────────────
+
+class HospitalUserUpdate(BaseModel):
+    role: Optional[HospitalAdminRole] = None
+    designation: Optional[str] = None
+    branch_id: Optional[str] = None
+    status: Optional[str] = None
+
+
+@router.post("/me/users/", response_model=InviteOut, status_code=201, summary="Add hospital user")
+async def add_hospital_user(invite: HospitalUserInvite, current_user=Depends(get_current_user)):
+    from django.contrib.auth import get_user_model
+    from apps.hospitals.models import HospitalUser
+
+    def _add():
+        try:
+            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        User = get_user_model()
+        user, _ = User.objects.get_or_create(
+            phone=invite.phone, defaults={'user_type': 'HOSPITAL_HR', 'status': 'ACTIVE'}
+        )
+        if HospitalUser.objects.filter(user=user).exists():
+            raise HTTPException(status_code=409, detail="User already in a hospital")
+        HospitalUser.objects.create(
+            user=user, hospital=hu.hospital, role=invite.role.value,
+            designation=invite.designation, branch_id=invite.branch_id,
+        )
+        return invite.phone, invite.role.value
+
+    try:
+        phone, role = await sync_to_async(_add, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return InviteOut(success=True, message=f"{phone} added as {role}")
+
+
+@router.get("/me/users/", response_model=List[StaffOut], summary="List hospital users")
+async def list_hospital_users(current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+
+    def _list():
+        try:
+            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        return list(HospitalUser.objects.filter(hospital=hu.hospital).select_related('user'))
+
+    try:
+        users = await sync_to_async(_list, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return [StaffOut(user_id=str(u.user_id), phone=u.user.phone, role=u.role,
+                     designation=u.designation, status=u.status) for u in users]
+
+
+@router.patch("/me/users/{user_id}/", response_model=InviteOut, summary="Update user role/branch/status")
+async def update_hospital_user(user_id: str, body: HospitalUserUpdate, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+
+    def _update():
+        try:
+            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        try:
+            target = HospitalUser.objects.get(user_id=user_id, hospital=hu.hospital)
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=404, detail="User not found")
+        if body.role:
+            target.role = body.role.value
+        if body.designation is not None:
+            target.designation = body.designation
+        if body.branch_id is not None:
+            target.branch_id = body.branch_id
+        if body.status:
+            target.status = body.status
+        target.save()
+
+    try:
+        await sync_to_async(_update, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return InviteOut(success=True, message="User updated")
+
+
+@router.delete("/me/users/{user_id}/", status_code=204, summary="Revoke user membership")
+async def remove_hospital_user(user_id: str, current_user=Depends(get_current_user)):
+    from apps.hospitals.models import HospitalUser
+
+    def _remove():
+        try:
+            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
+        except HospitalUser.DoesNotExist:
+            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        deleted = HospitalUser.objects.filter(user_id=user_id, hospital=hu.hospital).delete()[0]
+        if not deleted:
+            raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        await sync_to_async(_remove, thread_sensitive=True)()
+    except HTTPException:
+        raise

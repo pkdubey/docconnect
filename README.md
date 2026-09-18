@@ -12,20 +12,22 @@
 3. [Module 3 — Doctor Career Marketplace](#3-module-2--doctor-career-marketplace)
 4. [Module 4 — Doctor Availability Exchange](#4-module-3--doctor-availability-exchange)
 5. [Module 5 — Platform Operations (Admin CRM)](#5-module-5--platform-operations-admin-crm)
-6. [API Global Contract](#6-api-global-contract)
-7. [System Architecture](#7-system-architecture)
-8. [Technology Stack](#8-technology-stack)
-9. [Database Design](#9-database-design)
-10. [API Architecture (FastAPI)](#10-api-architecture-fastapi)
-11. [Project Structure](#11-project-structure)
-12. [Development Setup](#12-development-setup)
-13. [Deployment](#13-deployment)
-14. [API Documentation](#14-api-documentation)
-15. [Security](#15-security)
-16. [Testing](#16-testing)
-17. [Troubleshooting](#17-troubleshooting)
-18. [Roadmap](#18-roadmap)
-19. [Contributing](#19-contributing)
+6. [Module 6 — Doctor Mobile App](#6-module-6--doctor-mobile-app)
+7. [Backend, Database & API Specification (Spec 02)](#7-backend-database--api-specification-spec-02)
+8. [API Global Contract](#8-api-global-contract)
+9. [System Architecture](#9-system-architecture)
+10. [Technology Stack](#10-technology-stack)
+11. [Database Design](#11-database-design)
+12. [API Architecture (FastAPI)](#12-api-architecture-fastapi)
+13. [Project Structure](#13-project-structure)
+14. [Development Setup](#14-development-setup)
+15. [Deployment](#15-deployment)
+16. [API Documentation](#16-api-documentation)
+17. [Security](#17-security)
+18. [Testing](#18-testing)
+19. [Troubleshooting](#19-troubleshooting)
+20. [Roadmap](#20-roadmap)
+21. [Contributing](#21-contributing)
 
 ---
 
@@ -49,7 +51,8 @@ DocConnect is a verified professional network exclusively for doctors. It provid
 | **Module 2 — Professional Network & Community** | LinkedIn-style verified profiles, connections, feed, specialty communities, messaging | [Section 2](#2-module-1--doctor-professional-network) |
 | **Module 3 — Career Marketplace & Recruitment** | Hospital job posting, one-tap apply, recruitment CRM, AI matching | [Section 3](#3-module-2--doctor-career-marketplace) |
 | **Module 4 — Availability Exchange & Workforce** | Doctor availability, urgent shift requirements, doctor matching, shift lifecycle | [Section 4](#4-module-3--doctor-availability-exchange) |
-| **Module 5 — Platform Operations** | Admin CRM, moderation, reports, support, audit, analytics, billing | [Section 12](#12-api-documentation) |
+| **Module 5 — Platform Operations** | Admin CRM, moderation, reports, support, audit, analytics, billing | [Section 5](#5-module-5--platform-operations-admin-crm) |
+| **Module 6 — Doctor Mobile App** | Navigation, onboarding, profile, networking rules, feed safety, jobs, availability, edge cases | [Section 6](#6-module-6--doctor-mobile-app) |
 
 ### 1.3 Actors & Target Users
 
@@ -344,6 +347,42 @@ Doctor A ──▶ Start Conversation ──▶ Doctor B
 
 > Hospital-side job posting + doctor-side one-tap apply + full recruitment CRM pipeline + AI matching (Phase 2).
 
+### 3.0 Hospital / HR CRM
+
+**CRM Purpose:** The hospital CRM is the recruitment and workforce operating console. It lets verified healthcare institutions discover doctors, publish jobs, manage applicants and source urgent/temporary coverage.
+
+**CRM Main Menu:**
+
+| Menu | Functions |
+|------|-----------|
+| Dashboard | Active jobs, new applicants, shortlisted doctors, interviews, urgent requirements |
+| Hospital Profile | Profile, branches, departments, facilities, verification |
+| Users & Roles | Owner/Admin, HR/Recruiter, branch-level access |
+| Jobs | Create/edit/publish/close, applicants, status management |
+| Candidates | Search doctors, filters, profile view, shortlist, notes, communication |
+| Applications | Pipeline, interview, offer/hire/reject/withdraw |
+| Availability Exchange | Urgent requirements, matched doctors, requests, confirmations |
+| Messages | Doctor/hospital professional conversations |
+| Notifications | Recruitment and workforce alerts |
+| Reports/Analytics | Hiring funnel, jobs, candidate activity, workforce metrics |
+| Billing | Plan, limits, invoices, subscription — if activated |
+| Settings | Privacy, notification preferences, organization settings |
+
+**CRM Permission Matrix:**
+
+| Action | Hospital Admin | HR/Recruiter | Branch User |
+|--------|---------------|--------------|-------------|
+| Edit organization profile | Yes | Configurable | No/limited |
+| Manage users | Yes | No | No |
+| Create jobs | Yes | Yes | Configurable |
+| View candidates | Yes | Yes | Assigned/branch scope |
+| Change application status | Yes | Yes | Configurable |
+| Create urgent requirement | Yes | Yes | Configurable |
+| Billing | Yes | No | No |
+| Audit logs | Yes | Limited | No |
+
+> Exact permissions must be finalized before backend RBAC implementation.
+
 ### 3.1 Hospital Onboarding
 
 ```
@@ -374,18 +413,55 @@ Hospital
 
 ### 3.2 Job Posting
 
-**Job Post Fields:**
+**Job Creation Fields:**
 
-| Field | Options |
-|-------|---------|
-| `job_type` | `FULL_TIME` / `PART_TIME` / `VISITING` / `LOCUM` / `CONTRACT` |
-| `shift_type` | `DAY` / `NIGHT` / `ROTATIONAL` / `FLEXIBLE` |
-| `salary_visibility` | `PUBLIC` / `ON_REQUEST` / `HIDDEN` |
-| `status` | `DRAFT` → `PUBLISHED` → `CLOSED` / `EXPIRED` / `FILLED` |
-| `is_urgent` | Boolean — shows urgent badge |
-| `positions` | Number of openings |
+| Field | Description |
+|-------|-------------|
+| `title` | Job title / role |
+| `department_id` | Linked department |
+| `qualification_ids` | Required qualifications |
+| `specialty_id` | Required specialization |
 | `experience_min_years` | Minimum experience required |
-| `closing_date` | Auto-expire date |
+| `location` | JSONB — city, state, pincode, coordinates |
+| `salary_min` / `salary_max` | Salary range |
+| `salary_visibility` | `PUBLIC` / `ON_REQUEST` / `HIDDEN` |
+| `shift_type` | `DAY` / `NIGHT` / `ROTATIONAL` / `FLEXIBLE` |
+| `joining_requirement` | Joining date / notice period |
+| `job_type` | `FULL_TIME` / `PART_TIME` / `VISITING` / `LOCUM` / `CONTRACT` |
+| `description` | Full job description |
+| `positions` | Number of openings |
+| `is_urgent` | Boolean — shows urgent badge |
+| `closing_date` | Application deadline / auto-expire date |
+| `status` | `DRAFT` → `PUBLISHED` → `CLOSED` / `EXPIRED` / `FILLED` |
+
+### 3.2a Candidate Discovery Filters
+
+Hospital HR can search and filter doctors using:
+
+- Qualification
+- Specialization
+- Experience (years)
+- Location / city / state
+- Verified doctor only
+- Professional status
+- Available now
+- Locum availability
+- Visiting consultant availability
+- Distance / radius (km)
+
+### 3.2b Candidate Actions
+
+| Action | Description |
+|--------|-------------|
+| View profile | View allowed professional profile fields per privacy settings |
+| Shortlist | Add doctor to shortlist for a job |
+| Reject | Mark candidate as not suitable |
+| Move pipeline | Move through APPLIED → SHORTLISTED → INTERVIEW → OFFERED → HIRED |
+| Send message | Send professional message via messaging module |
+| Invite to opportunity | Invite doctor to apply for a specific job |
+| Add internal notes | Add HR-only notes on candidate (stored in application metadata) |
+| Record interview outcome | Update interview result (PASS/FAIL/PENDING) |
+| Issue offer / mark hired | Send offer letter details, mark as HIRED on acceptance |
 
 ### 3.3 Job Application Pipeline (Recruitment CRM)
 
@@ -414,6 +490,34 @@ Every status change is logged in `ApplicationHistory` with:
 - `from_status` / `to_status`
 - `changed_by` (user who made the change)
 - `notes` (optional reason)
+
+### 3.3a Urgent Requirement Workflow
+
+```
+1. Hospital creates ShiftRequirement
+   (specialty, qualification, date, start/end time,
+    location, compensation, doctors_required, urgency, notes)
+        │
+        ▼
+2. System finds eligible available doctors
+   (matches availability type, date, location, compensation)
+        │
+        ▼
+3. HR reviews matching candidates list
+        │
+        ▼
+4. Hospital sends ShiftRequest to selected doctor
+        │
+        ▼
+5. Doctor accepts / declines
+        │
+        ▼
+6. Hospital confirms (CONFIRMED_BY_HOSPITAL)
+        │
+        ▼
+7. Shift completed or cancelled
+   (all state changes timestamped and auditable)
+```
 
 ### 3.4 AI Matching
 
@@ -665,19 +769,34 @@ Every status change is logged in `ApplicationHistory` with:
 
 ### 5.1 Admin Capabilities
 
-| Feature | Description |
-|---------|-------------|
-| Verification Queue | Review doctor & hospital verification submissions |
-| User Management | Restrict, suspend, restore, deactivate users |
-| Content Moderation | Hide/remove/restore posts, jobs, comments |
-| Reports Queue | Review and action user-submitted reports |
-| Community Management | Create/archive specialty communities |
-| Audit Logs | Immutable log of all privileged actions |
-| Support Tickets | Manage user support requests |
-| Analytics Dashboard | Operational metrics — doctors, hospitals, jobs, applications |
-| Billing Management | Manage hospital subscriptions, refunds (feature-flagged) |
+| Module | Admin Capabilities |
+|--------|--------------------|
+| Overview | Doctors, hospitals, verified accounts, jobs, applications, urgent requirements, reports, active users |
+| Doctor Verification | Queue, document review, approve/reject with reason, resubmission control, waiting time |
+| Hospital Verification | Organization review, documents, approve/reject, branches |
+| User Management | Search, view, restrict, suspend, restore, deactivate — reason required, audit logged |
+| Moderation | Posts/comments/reports — patient privacy concerns, misinformation flags, harassment, reason required |
+| Communities | Create/edit/archive specialty communities, manage moderators |
+| Jobs | Monitor jobs, remove policy-violating jobs, investigate suspicious activity |
+| Reports | Case queue, severity, evidence, resolution, escalation |
+| Support | User tickets/issues and internal admin notes |
+| Audit | Sensitive actions, verification decisions, restrictions, content removals — immutable log |
+| Billing | Plans, entitlements, subscriptions, invoices/refunds (feature-flagged) |
+| Settings | Specialties, qualifications, status values, configurable matching weights |
 
-### 5.2 Moderation Reason Codes
+### 5.2 Verification SOP
+
+| Step | Action |
+|------|--------|
+| 1 | Receive submission — doctor/hospital submits registration details & documents |
+| 2 | Validate required fields and documents are present |
+| 3 | Check registration information using the approved verification process |
+| 4 | Approve or reject with mandatory reason |
+| 5 | Record reviewer, timestamp and evidence in `AuditLog` |
+| 6 | Notify user of outcome via in-app + push notification |
+| 7 | Allow controlled resubmission for rejected cases |
+
+### 5.2a Moderation Reason Codes
 
 - `PATIENT_PRIVACY_CONCERN`
 - `POTENTIAL_MEDICAL_MISINFORMATION`
@@ -688,6 +807,20 @@ Every status change is logged in `ApplicationHistory` with:
 - `PROFESSIONAL_MISCONDUCT_CONCERN`
 - `OTHER_POLICY_VIOLATION`
 
+### 5.2b Admin Safety Controls
+
+- Two-step confirmation for irreversible actions (deactivate/delete)
+- Reason required for all rejection / suspension / removal actions (400 if missing)
+- Every privileged action writes an immutable `AuditLog` entry (`performed_by`, `target_type`, `target_id`, `metadata`)
+- Role check on every admin endpoint — 403 if `user_type != ADMIN`
+- Role separation between reviewer and super-admin for high-risk actions
+- Private access to credential documents — signed URLs only, never public
+- Export controls for sensitive data
+- Search and filters across all case queues
+- Internal support notes (`is_internal=True`) are hidden from end users
+- Report severity levels: `LOW` / `MEDIUM` / `HIGH` / `CRITICAL`
+- Matching config activation deactivates all other versions atomically
+
 ### 5.3 Report Lifecycle
 
 ```
@@ -696,6 +829,60 @@ Every status change is logged in `ApplicationHistory` with:
                     ├──▶ DISMISSED
                     └──▶ ESCALATED
 ```
+
+**Report Model Fields:**
+
+| Field | Description |
+|-------|-------------|
+| `reporter` | User who filed the report |
+| `target_type` | `PROFILE` / `POST` / `COMMENT` / `JOB` / `HOSPITAL` |
+| `target_id` | UUID of the reported object |
+| `reason` | One of the 8 reason codes above |
+| `severity` | `LOW` / `MEDIUM` / `HIGH` / `CRITICAL` |
+| `status` | `SUBMITTED` → `UNDER_REVIEW` → `ACTIONED` / `DISMISSED` / `ESCALATED` |
+| `reviewed_by` | Admin who actioned the report |
+| `resolution_notes` | Admin notes on resolution |
+| `resolved_at` | Timestamp of resolution |
+
+### 5.3a Support Ticket Model
+
+| Field | Description |
+|-------|-------------|
+| `user` | Ticket owner |
+| `subject` / `description` | Ticket content |
+| `category` | `GENERAL` / `VERIFICATION` / `BILLING` / `TECHNICAL` |
+| `status` | `OPEN` → `IN_PROGRESS` → `RESOLVED` / `CLOSED` |
+| `assigned_to` | Admin assigned to ticket |
+| `resolved_at` | Timestamp of resolution |
+| `messages` | Thread of `SupportMessage` records |
+| `is_internal` | Admin-only internal notes hidden from user |
+
+### 5.3b Matching Config
+
+```
+  MatchingConfig
+  ├── version       (e.g. "v1", "v2") — unique
+  ├── weights       JSONB — {"specialization_match": 0.3, "experience": 0.2, ...}
+  ├── is_active     only one config active at a time
+  ├── approved_by   admin who created/approved
+  └── description   optional notes
+```
+
+### 5.3c Operational Metrics (Analytics Overview)
+
+| Metric | Description |
+|--------|-------------|
+| Doctor verification turnaround | Avg hours from submission to VERIFIED |
+| Hospital verification turnaround | Avg hours from submission to VERIFIED |
+| Verified doctors by specialty / location | Top 10 specialties with verified doctor counts |
+| Active hospitals | Verified hospital count |
+| Jobs posted / filled | Total, published, filled, urgent |
+| Application funnel | Count per status: APPLIED → SHORTLISTED → INTERVIEW → OFFERED → HIRED |
+| Urgent requirements filled | Count of IMMEDIATE/URGENT shift requirements with status FILLED |
+| Shift acceptance rate | % of shift requests accepted by doctors |
+| Shift completion rate | % of shift requests completed |
+| Report resolution time | Avg hours from report submission to resolution |
+| Network growth & active engagement | Total connections, accepted connections, active users |
 
 ### 5.4 Notification Event Matrix
 
@@ -720,38 +907,46 @@ Every status change is logged in `ApplicationHistory` with:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/v1/admin/dashboard/` | Platform overview metrics |
-| GET | `/api/v1/admin/doctors/verification-queue/` | Doctor verification queue |
+| GET | `/api/v1/admin/dashboard/` | Platform overview metrics (includes open reports & tickets) |
+| GET | `/api/v1/admin/doctors/verification-queue/` | Doctor verification queue (includes `waiting_hours`) |
 | GET | `/api/v1/admin/doctors/verification-cases/{id}/` | Verification case detail |
-| POST | `/api/v1/admin/doctors/verification-cases/{id}/approve/` | Approve doctor verification |
-| POST | `/api/v1/admin/doctors/verification-cases/{id}/reject/` | Reject doctor verification |
-| POST | `/api/v1/admin/doctors/verification-cases/{id}/resubmit/` | Allow resubmission |
-| GET | `/api/v1/admin/hospitals/verification-queue/` | Hospital verification queue |
-| POST | `/api/v1/admin/hospitals/verification-cases/{id}/approve/` | Approve hospital verification |
-| POST | `/api/v1/admin/hospitals/verification-cases/{id}/reject/` | Reject hospital verification |
-| GET | `/api/v1/admin/users/` | List all users |
-| POST | `/api/v1/admin/users/{id}/restrict/` | Restrict user |
-| POST | `/api/v1/admin/users/{id}/suspend/` | Suspend user |
-| POST | `/api/v1/admin/users/{id}/restore/` | Restore user |
-| POST | `/api/v1/admin/users/{id}/deactivate/` | Deactivate user |
-| GET | `/api/v1/admin/reports/` | Reports queue |
+| POST | `/api/v1/admin/doctors/verification-cases/{id}/approve/` | Approve doctor verification — writes AuditLog |
+| POST | `/api/v1/admin/doctors/verification-cases/{id}/reject/` | Reject doctor verification — reason required, writes AuditLog |
+| POST | `/api/v1/admin/doctors/verification-cases/{id}/resubmit/` | Allow resubmission — writes AuditLog |
+| GET | `/api/v1/admin/hospitals/verification-queue/` | Hospital verification queue (includes `waiting_hours`) |
+| POST | `/api/v1/admin/hospitals/verification-cases/{id}/approve/` | Approve hospital verification — writes AuditLog |
+| POST | `/api/v1/admin/hospitals/verification-cases/{id}/reject/` | Reject hospital verification — reason required, writes AuditLog |
+| GET | `/api/v1/admin/users/` | List all users (filter: user_type, status, search) |
+| POST | `/api/v1/admin/users/{id}/restrict/` | Restrict user — reason required, writes AuditLog |
+| POST | `/api/v1/admin/users/{id}/suspend/` | Suspend user — reason required, writes AuditLog |
+| POST | `/api/v1/admin/users/{id}/restore/` | Restore user — reason required, writes AuditLog |
+| POST | `/api/v1/admin/users/{id}/deactivate/` | Deactivate user — reason required, writes AuditLog |
+| GET | `/api/v1/admin/reports/` | Reports queue (filter: status, severity, target_type) |
 | GET | `/api/v1/admin/reports/{id}/` | Report detail |
-| POST | `/api/v1/admin/reports/{id}/action/` | Action a report |
-| POST | `/api/v1/admin/reports/{id}/dismiss/` | Dismiss a report |
-| POST | `/api/v1/admin/reports/{id}/escalate/` | Escalate a report |
-| POST | `/api/v1/admin/posts/{id}/moderate/` | Moderate a post |
-| POST | `/api/v1/admin/jobs/{id}/moderate/` | Moderate a job |
-| POST | `/api/v1/admin/communities/` | Create specialty community |
-| PATCH | `/api/v1/admin/communities/{id}/` | Update community |
-| POST | `/api/v1/admin/communities/{id}/archive/` | Archive community |
-| GET | `/api/v1/admin/audit-logs/` | Audit log records |
-| GET | `/api/v1/admin/analytics/overview/` | Analytics overview |
-| POST | `/api/v1/support/tickets/` | Create support ticket |
-| GET | `/api/v1/support/tickets/` | List my support tickets |
-| GET | `/api/v1/support/tickets/{id}/` | Ticket detail + messages |
-| POST | `/api/v1/support/tickets/{id}/messages/` | Add message to ticket |
+| POST | `/api/v1/admin/reports/{id}/action/` | Action a report — writes AuditLog |
+| POST | `/api/v1/admin/reports/{id}/dismiss/` | Dismiss a report — writes AuditLog |
+| POST | `/api/v1/admin/reports/{id}/escalate/` | Escalate a report — writes AuditLog |
+| POST | `/api/v1/admin/posts/{id}/moderate/` | Moderate a post — reason required, writes AuditLog |
+| POST | `/api/v1/admin/jobs/{id}/moderate/` | Moderate a job — reason required, writes AuditLog |
+| POST | `/api/v1/admin/communities/` | Create specialty community — writes AuditLog |
+| PATCH | `/api/v1/admin/communities/{id}/` | Update community — writes AuditLog |
+| POST | `/api/v1/admin/communities/{id}/archive/` | Archive community — writes AuditLog |
+| GET | `/api/v1/admin/audit-logs/` | Audit log records (filter: action, target_type) |
+| GET | `/api/v1/admin/analytics/overview/` | Full operational analytics (turnaround, funnel, shift rates, resolution time) |
+| GET | `/api/v1/admin/support/tickets/` | Admin: list all tickets (filter: status, category) |
 | PATCH | `/api/v1/admin/support/tickets/{id}/` | Update ticket status (admin) |
 | POST | `/api/v1/admin/support/tickets/{id}/resolve/` | Resolve ticket |
+| POST | `/api/v1/admin/support/tickets/{id}/messages/` | Admin reply or internal note on ticket — `is_internal` flag supported |
+| GET | `/api/v1/admin/matching-configs/` | List all matching weight configs |
+| POST | `/api/v1/admin/matching-configs/` | Create new matching config version |
+| POST | `/api/v1/admin/matching-configs/{id}/activate/` | Activate a matching config (deactivates others) |
+| POST | `/api/v1/admin/settings/specialties/` | Create specialty (admin) |
+| PATCH | `/api/v1/admin/settings/specialties/{id}/` | Update specialty (admin) |
+| POST | `/api/v1/admin/settings/qualifications/` | Create qualification (admin) |
+| POST | `/api/v1/support/tickets/` | Create support ticket |
+| GET | `/api/v1/support/tickets/` | List my support tickets (filter: status) |
+| GET | `/api/v1/support/tickets/{id}/` | Ticket detail + messages (internal notes hidden) |
+| POST | `/api/v1/support/tickets/{id}/messages/` | Add message to ticket |
 | GET | `/api/v1/billing/plans/` | List billing plans |
 | GET | `/api/v1/billing/subscription/` | Current hospital subscription |
 | POST | `/api/v1/billing/subscription/` | Subscribe to a plan |
@@ -763,9 +958,356 @@ Every status change is logged in `ApplicationHistory` with:
 
 ---
 
-## 6. API Global Contract
+## 6. Module 6 — Doctor Mobile App
 
-### 6.1 Standard Response Envelopes
+> Android-native doctor app — verified professional identity, networking, jobs, availability exchange & clinical community.
+
+### 6.1 Navigation Structure
+
+| Area | Screens |
+|------|---------|
+| Onboarding | Splash, login, register, OTP/verification, credential submission, verification status |
+| Home | Professional feed, recommended jobs, recommended doctors/communities, notifications |
+| Network | Doctor search, filters, profile, connection requests, connections, following |
+| Jobs | Recommended, nearby, urgent, saved, applied; job detail; apply; application tracker |
+| Availability | Status, availability calendar, time slots, preferences, current/previous availability |
+| Communities | Specialty list, community feed, posts, discussions |
+| Messages | Conversation list, chat, attachments, professional context |
+| Profile | Professional identity, experience, hospitals, qualifications, interests, privacy |
+| Settings | Privacy, notifications, blocked users, account/security, support, logout |
+
+### 6.2 Doctor Onboarding Flow
+
+```
+1. Create account (phone + password or OTP)
+        │
+        ▼
+2. Complete professional identity
+   (name, photo, headline, specialization, experience, location, languages)
+        │
+        ▼
+3. Enter medical registration
+   (registration number, medical council, registration year, documents)
+        │
+        ▼
+4. Submit verification
+        │
+        ▼
+5. Show verification state:
+   ├─► PENDING  — awaiting admin review
+   ├─► VERIFIED — green badge unlocked
+   └─► REJECTED — reason shown + resubmission path
+        │
+        ▼
+6. Until VERIFIED: restrict actions that require verified status
+   (applying to jobs, posting availability, messaging hospitals)
+```
+
+**Verification-gated actions:**
+
+| Action | Requires Verified |
+|--------|------------------|
+| Apply to jobs | Yes |
+| Post availability | Yes |
+| Message hospitals | Yes |
+| Browse feed / posts | No |
+| Search doctors | No |
+| Send connection requests | No |
+
+### 6.3 Professional Profile
+
+| Field | Description |
+|-------|-------------|
+| `first_name` / `last_name` | Doctor's full name |
+| `photo_file_id` | Profile photo (S3) |
+| `headline` | 160-char tagline |
+| `about` | Rich bio / summary |
+| `primary_specialization_id` | Primary specialty |
+| `clinical_interests` | Secondary specialties (array) |
+| `experience_years` | Total experience (decimal) |
+| `qualifications` | Degree, institution, year |
+| `experiences` | Role, hospital, dates, is_current |
+| `affiliations` | Current/previous hospital affiliations (JSONB) |
+| `languages` | Spoken languages (e.g. `["English", "Hindi"]`) |
+| `career_preferences` | Job type, location, salary preferences (JSONB) |
+| `professional_location` | City, state, pincode, coordinates |
+| `open_to_opportunities` | Availability badge for hospitals |
+| `profile_visibility` | `EVERYONE` / `DOCTORS_ONLY` / `CONNECTIONS_ONLY` |
+| `career_visibility` | `VERIFIED_HOSPITALS` / `SELECTED_HOSPITALS` / `HIDDEN` |
+| `verification_status` | `UNVERIFIED` / `PENDING` / `VERIFIED` / `REJECTED` |
+
+### 6.4 Networking Rules
+
+| Relationship | Messaging Allowed | Profile Data Visible |
+|--------------|------------------|---------------------|
+| No relationship | No (doctors only after connection) | Name, headline, specialty, location per `profile_visibility` |
+| Connection request sent/received | No | Same as above |
+| Connected | Yes | Full professional profile |
+| Blocked | No | Hidden |
+
+> Messaging is only allowed between connected doctors. Hospitals can message doctors directly via the hospital CRM (professional context only).
+
+### 6.5 Feed & Clinical Discussion Rules
+
+- Post category must be selected from: `UPDATE` / `CASE` / `ARTICLE` / `PHOTO`
+- `CASE` posts require `patient_privacy_confirmed = true` before submission
+- PII auto-detection blocks posts containing: phone numbers, Aadhaar (12-digit), email addresses, patient IDs (PT\d+, IPD\d+)
+- `pii_flagged = true` is set server-side if PII patterns are detected in non-CASE posts (flagged for moderation)
+- Report and moderation controls available on every post and comment
+- Feed remains professional — generic social content is subject to moderation
+
+**PII patterns blocked/flagged:**
+
+| Pattern | Example |
+|---------|---------|
+| Indian mobile number | `9876543210` |
+| Aadhaar number | `123456789012` |
+| Email address | `patient@gmail.com` |
+| Patient ID | `PT001234`, `IPD/5678` |
+
+### 6.6 Jobs & Application
+
+```
+Browse tabs:
+  Recommended ── match_score + match_factors shown per job
+  Nearby       ── filtered by professional_location
+  Urgent       ── is_urgent = true
+  Saved        ── doctor's saved_jobs list
+  Applied      ── my-applications with status filter
+
+Job Detail:
+  └─ match_score (0–100) + match_factors breakdown
+  └─ salary visibility: PUBLIC / ON_REQUEST / HIDDEN
+  └─ what information is shared on apply (profile fields)
+
+Apply:
+  └─ One-tap apply uses professional profile
+  └─ Optional CV attachment (file_id)
+  └─ Confirmation screen shows exactly what is shared
+
+Application Tracker:
+  APPLIED → PROFILE_VIEWED → SHORTLISTED → INTERVIEW → OFFERED → HIRED
+                                                                    └→ REJECTED
+  Doctor can WITHDRAW at any stage before HIRED/REJECTED
+```
+
+**Match Score Factors (V1):**
+
+| Factor | Weight |
+|--------|--------|
+| Specialization match | 40 pts |
+| Experience ≥ required | 30 pts |
+| Open to opportunities | 15 pts |
+| Verified doctor | 15 pts |
+
+### 6.7 Availability Exchange
+
+```
+Doctor sets availability:
+  Type: LOCUM / VISITING / TEMPORARY / PART_TIME
+  Dates: available_from → available_until
+  Location: city + preferred_radius_km
+  Min compensation: private (never shown publicly)
+  Slots: date + start_time + end_time
+
+Calendar rules:
+  └─ Adding a slot checks for overlapping ACCEPTED/CONFIRMED shifts → 409 if conflict
+  └─ Deactivating availability blocked if pending/confirmed shift requests exist
+
+Shift request flow:
+  Hospital sends request → Doctor accepts/declines → Hospital confirms → Completed
+  Doctor can cancel before COMPLETED
+  Hospital can cancel at any stage
+```
+
+### 6.8 Doctor-side Edge Cases
+
+| Edge Case | Behaviour |
+|-----------|----------|
+| Verification rejected | Show rejection reason + resubmit button; restrict verified-only actions |
+| Expired / invalid credential | Admin rejects with reason; doctor must resubmit updated documents |
+| Hospital affiliation changed | Doctor updates affiliation via PATCH `/api/v1/doctors/profile/me/affiliations/{id}/` |
+| Doctor changes status while application active | Application remains; doctor can withdraw; hospital sees updated status |
+| Doctor deletes availability with active shift request | 409 — must cancel shift requests first |
+| Overlapping shifts | 409 on slot creation and shift request if accepted/confirmed shift overlaps |
+| Shift cancelled by hospital | ShiftRequest status → `CANCELLED`; doctor's slot `is_booked` reset; notification sent |
+| Doctor blocks hospital/user | Blocked user hidden from feed/search; messaging disabled |
+| Message/report abuse | Report submitted via `POST /api/v1/reports/`; conversation block via messaging endpoints |
+| Document upload failure | `UPLOAD_INVALID` (400) with file type/size reason; retry allowed |
+| Account deletion | User status → `DELETED`; active applications → `WITHDRAWN`; availabilities deactivated; pending shift requests → `CANCELLED` |
+
+---
+
+## 7. Backend, Database & API Specification (Spec 02)
+
+> Source of truth for all backend decisions — entities, state machines, API groups, matching engine, privacy enforcement, security and API contract standards.
+
+### 7.1 Backend Objective
+
+Build a role-based platform API supporting Doctor, Hospital/HR and Platform Admin workflows. The backend is the authoritative source of truth for verification, privacy, matching, application, availability and shift states. All privacy rules are enforced at the query/serialization layer — hiding a field only in the UI is insufficient.
+
+### 7.2 Core Entity Map
+
+| Django App | Models / Tables |
+|------------|-----------------|
+| `accounts` | `users`, `otp_challenges`, `refresh_sessions` |
+| `doctors` | `doctor_profiles`, `doctor_registrations`, `doctor_qualifications`, `doctor_experiences`, `doctor_affiliations`, `doctor_connections`, `follows`, `blocks`, `doctor_posts`, `post_likes`, `post_comments` |
+| `hospitals` | `hospitals`, `hospital_branches`, `hospital_departments`, `hospital_users`, `hospital_follows` |
+| `jobs` | `job_posts`, `job_applications`, `application_histories`, `job_saves` |
+| `availability` | `doctor_availabilities`, `availability_slots` |
+| `shifts` | `shift_requirements`, `shift_requests`, `shift_status_history` |
+| `messaging` | `conversations`, `conversation_participants`, `messages` |
+| `notifications` | `notifications`, `device_tokens`, `notification_preferences` |
+| `core` | `specializations`, `qualifications`, `councils`, `communities`, `community_members`, `audit_logs`, `reports`, `support_tickets`, `support_messages`, `matching_configs`, `plans`, `subscriptions`, `entitlements`, `invoices`, `payments` |
+
+### 7.3 State Machines
+
+| Object | States |
+|--------|--------|
+| Doctor verification | `UNVERIFIED` → `PENDING` → `VERIFIED` / `REJECTED` → `RESUBMISSION` |
+| Hospital verification | `UNVERIFIED` → `PENDING` → `VERIFIED` / `REJECTED` → `RESUBMISSION` |
+| Job application | `APPLIED` → `PROFILE_VIEWED` → `SHORTLISTED` → `INTERVIEW` → `OFFERED` → `HIRED` / `REJECTED` / `WITHDRAWN` |
+| Shift request | `REQUESTED` → `ACCEPTED_BY_DOCTOR` → `CONFIRMED_BY_HOSPITAL` → `COMPLETED` / `CANCELLED` |
+| Professional status | `AVAILABLE_NOW` / `FULL_TIME` / `LOCUM` / `VISITING` / `PART_TIME` / `NOT_LOOKING` |
+| Report | `SUBMITTED` → `UNDER_REVIEW` → `ACTIONED` / `DISMISSED` / `ESCALATED` |
+| Subscription | `TRIALING` → `ACTIVE` → `PAST_DUE` → `CANCELLED` / `EXPIRED` |
+| Invoice | `DRAFT` → `OPEN` → `PAID` / `VOID` / `UNCOLLECTIBLE` |
+| Payment | `PENDING` → `CAPTURED` / `FAILED` → `REFUNDED` / `PARTIALLY_REFUNDED` |
+
+### 7.4 API Groups & Responsibilities
+
+| API Domain | Router File | Minimum Responsibility |
+|------------|-------------|------------------------|
+| Auth | `auth.py` | Register, login, OTP, refresh, logout, password reset, session/device management |
+| Doctor | `doctors.py` | Profile CRUD, credentials, documents, verification, experiences, affiliations, professional status |
+| Hospital | `hospitals.py` | Profile, branches, departments, verification, hospital users/roles |
+| Discovery | `search.py` | Doctor search, hospital search, job search, community search, filters, pagination |
+| Network | `network.py` | Connection request/accept/reject/remove, follow/unfollow, block/unblock |
+| Feed | `feed.py` | Create/edit/delete post, comments, reactions, feed retrieval, PII detection, report |
+| Community | `communities.py` | List, join/leave, posts, moderation |
+| Jobs | `jobs.py` | Create/publish/close, save, apply, application status, candidate shortlist |
+| Matching | `jobs.py` | Job→doctor matches and doctor→job recommendations with transparent score breakdown |
+| Availability | `availability.py` | Calendar/slots, preferences, matching, urgent requirements |
+| Shift | `shifts.py` | Request, accept/decline, confirm, complete, cancel, status history |
+| Messaging | `messaging.py` | Conversations, messages, attachments, read receipts, block/report |
+| Notifications | `notifications.py` | List, read, preferences, push token registration |
+| Admin | `admin.py` | Verification queues, moderation, reports, user restrictions, communities, jobs, audit logs |
+| Billing | `billing.py` | Plans, subscriptions, entitlements, invoices, payment webhooks |
+| Support | `support.py` | Tickets, messages, internal notes |
+| Masters | `masters.py` | Specialties, qualifications, councils, job/shift types |
+| Files | `files.py` | Upload, signed URLs, delete |
+
+### 7.5 Matching Engine — V1 Rules
+
+Weights are **not hardcoded**. They are product-approved values stored in the `matching_configs` table (`MatchingConfig` model). The backend must not invent production weights without product approval.
+
+```
+Matching Factors (weights = configurable via matching_configs):
+  • verification_status      • specialization_match
+  • qualification_match      • experience_years
+  • date_availability        • time_availability
+  • location_distance        • preferred_radius_km
+  • job_type_preference      • professional_status
+
+Output per match:
+  match_score: 0–100
+  score_components: [{factor, points, max_points}]
+  reasons: ["Specialization match", "Experience match", ...]
+```
+
+Score components are stored/returned so the UI can explain why a doctor/job matched.
+
+### 7.6 Privacy Enforcement Rules
+
+| Rule | Implementation |
+|------|----------------|
+| Phone & personal email never public | Excluded from all public serializers; only returned to the owner |
+| Career visibility | `VERIFIED_HOSPITALS` / `SELECTED_HOSPITALS` / `HIDDEN` — enforced at query level |
+| Detailed availability | Only visible to verified healthcare institutions |
+| Profile visibility | `EVERYONE` / `DOCTORS_ONLY` / `CONNECTIONS_ONLY` — enforced at query level |
+| Application snapshot | `JobApplication.metadata` stores the exact profile/document snapshot shared with the hospital at apply time |
+| Credential documents | Private S3 objects; access only via expiring signed URLs; never public |
+| Minimum compensation | Never returned in any public or hospital-facing API response |
+
+### 7.7 Security & Infrastructure Checklist
+
+| Item | Status | Notes |
+|------|--------|-------|
+| JWT access + refresh lifecycle | ✅ | `RefreshSession` model; revocation via `revoked_at` |
+| Secure token rotation | ✅ | New refresh token issued on each refresh |
+| RBAC + object-level authorization | ✅ | `user_type` check + hospital/doctor ownership checks per endpoint |
+| Rate limiting | ✅ | `slowapi` on auth, search, messaging, reports |
+| Encrypted transport | ✅ | HTTPS enforced via nginx + `HTTPSRedirectMiddleware` |
+| Secure secret storage | ✅ | All secrets via `.env` / AWS Secrets Manager in production |
+| Private object storage | ✅ | AWS S3 private bucket for credentials/documents |
+| Signed/expiring document URLs | ✅ | `GET /api/v1/files/{id}/signed-url/` |
+| File virus/type validation | ✅ | MIME type + size check on upload; `UPLOAD_INVALID` (400) on failure |
+| Audit logs for sensitive actions | ✅ | `AuditLog` model; written on every verification/restriction/removal action |
+| Database backups | ✅ | Configured via AWS RDS automated backups in production |
+| Monitoring & structured logs | ✅ | Sentry DSN + structured logging middleware |
+
+### 7.8 API Contract Standard
+
+Every endpoint must document:
+
+| Field | Description |
+|-------|-------------|
+| Method + Path | HTTP verb and URL pattern |
+| Auth Role | Required `user_type` or `ANONYMOUS` |
+| Request Schema | Pydantic model with field-level validation rules |
+| Field Validation | min/max length, regex, required vs optional |
+| Response Schema | Pydantic model for success response |
+| Error Codes | All possible `error.code` values from the standard error table |
+| Pagination | `page` + `page_size` query params; `meta.total` + `meta.has_next` in response |
+| Idempotency | Whether the endpoint is idempotent; payment webhooks require idempotency key |
+| Permission Checks | Object-level checks beyond role (e.g. hospital ownership, connection status) |
+| Side Effects | DB writes, notifications triggered, audit log entries written |
+| Notification Event | Which `NotificationEvent` code is fired (see Section 5.4) |
+| Audit Event | Which `AuditLog.action` string is written |
+
+**Standard response envelope:**
+```json
+// Success (single)
+{"success": true, "data": {...}, "message": "..."}
+
+// Success (list)
+{"success": true, "data": [...], "meta": {"page": 1, "page_size": 20, "total": 125, "has_next": true}}
+
+// Error
+{"success": false, "error": {"code": "ERR_CODE", "message": "Human-readable", "fields": {"field": "reason"}}}
+```
+
+### 7.9 New Models Added (Spec 02)
+
+The following models were added to complete the Spec 02 entity list:
+
+| Model | App | Table | Purpose |
+|-------|-----|-------|---------|
+| `DoctorAffiliation` | `doctors` | `doctor_affiliations` | Current/past hospital affiliations with role, dates |
+| `Follow` | `doctors` | `follows` | Doctor-to-doctor or doctor-to-hospital follow relationship |
+| `Block` | `doctors` | `blocks` | User-level block; hides from feed/search, disables messaging |
+| `JobSave` | `jobs` | `job_saves` | Doctor saves a job for later (replaces metadata JSONB approach) |
+| `ShiftStatusHistory` | `shifts` | `shift_status_history` | Immutable audit trail for every shift request state transition |
+| `DeviceToken` | `notifications` | `device_tokens` | FCM/APNs push tokens per device per user |
+| `NotificationPreference` | `notifications` | `notification_preferences` | Per-user, per-event push + in-app channel preferences |
+| `Plan` | `core` | `plans` | Billing plan definitions (name, price, cycle, features, limits) |
+| `Subscription` | `core` | `subscriptions` | Hospital subscription to a plan with lifecycle status |
+| `Entitlement` | `core` | `entitlements` | Active feature entitlements derived from a subscription |
+| `Invoice` | `core` | `invoices` | Billing invoices linked to subscriptions |
+| `Payment` | `core` | `payments` | Individual payment records with provider IDs and refund tracking |
+
+**Migrations created:**
+- `doctors/0011_add_affiliation_follow_block.py`
+- `jobs/0003_add_job_save.py`
+- `shifts/0002_add_shift_status_history.py`
+- `notifications/0002_add_device_token_notification_preference.py`
+- `core/0004_add_billing_models.py`
+
+---
+
+## 8. API Global Contract
+
+### 8.1 Standard Response Envelopes
 
 ```json
 // Success (single object)
@@ -778,7 +1320,7 @@ Every status change is logged in `ApplicationHistory` with:
 {"success": false, "error": {"code": "ERR_CODE", "message": "Human-readable message", "fields": {"field": "reason"}}}
 ```
 
-### 6.2 Standard Error Codes
+### 8.2 Standard Error Codes
 
 | Code | Meaning | HTTP |
 |------|---------|------|
@@ -803,7 +1345,7 @@ Every status change is logged in `ApplicationHistory` with:
 | `MODERATION_REQUIRED` | Content held for moderation | 202 |
 | `SERVER_ERROR` | Unexpected server error | 500 |
 
-### 6.3 Privacy Matrix
+### 8.3 Privacy Matrix
 
 | Data | Public/Everyone | Doctors Only | Connections Only | Verified Hospitals |
 |------|----------------|--------------|-----------------|-------------------|
@@ -817,9 +1359,9 @@ Every status change is logged in `ApplicationHistory` with:
 
 ---
 
-## 7. System Architecture
+## 9. System Architecture
 
-### 7.1 High-Level Architecture
+### 9.1 High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -884,7 +1426,7 @@ Every status change is logged in `ApplicationHistory` with:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 7.2 Data Flow Diagram
+### 9.2 Data Flow Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -920,9 +1462,9 @@ Every status change is logged in `ApplicationHistory` with:
 
 ---
 
-## 8. Technology Stack
+## 10. Technology Stack
 
-### 8.1 Core Technologies
+### 10.1 Core Technologies
 
 | Component | Technology | Version | Purpose |
 |-----------|------------|---------|---------|
@@ -936,7 +1478,7 @@ Every status change is logged in `ApplicationHistory` with:
 | **Auth** | SimpleJWT | 5.3+ | JWT access + refresh tokens |
 | **WSGI Bridge** | a2wsgi | 1.10+ | Mount Django under FastAPI |
 
-### 8.2 Frontend Technologies
+### 10.2 Frontend Technologies
 
 | Component | Technology | Version | Purpose |
 |-----------|------------|---------|---------|
@@ -945,7 +1487,7 @@ Every status change is logged in `ApplicationHistory` with:
 | **State Management** | Zustand/Redux | - | Client state management |
 | **API Client** | React Query | - | Data fetching and caching |
 
-### 8.3 DevOps & Infrastructure
+### 10.3 DevOps & Infrastructure
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
@@ -956,7 +1498,7 @@ Every status change is logged in `ApplicationHistory` with:
 | **Monitoring** | Sentry / Prometheus | Error tracking |
 | **Logging** | ELK Stack | Log aggregation |
 
-### 8.4 PostgreSQL Extensions
+### 10.4 PostgreSQL Extensions
 
 ```sql
 -- Required PostgreSQL extensions
@@ -970,9 +1512,9 @@ CREATE EXTENSION IF NOT EXISTS unaccent;     -- Unaccent text
 
 ---
 
-## 9. Database Design
+## 11. Database Design
 
-### 9.1 Complete Database Schema
+### 11.1 Complete Database Schema
 
 > The schema below reflects the actual Django models. Additional fields `photo_base64`, `cover_base64` (DoctorProfile) and `logo_base64` (Hospital) are stored as base64 text for dev convenience alongside S3 file IDs.
 
@@ -1411,9 +1953,9 @@ CREATE TRIGGER user_search_vector_update
 
 ---
 
-## 10. API Architecture (FastAPI)
+## 12. API Architecture (FastAPI)
 
-### 10.1 FastAPI Integration with Django
+### 12.1 FastAPI Integration with Django
 
 ```python
 # fastapi_app/main.py
@@ -2383,7 +2925,7 @@ async def health_check():
     }
 ```
 
-### 10.2 Running FastAPI with Django
+### 12.2 Running FastAPI with Django
 
 ```python
 # run.py - Combined server runner
@@ -2407,7 +2949,7 @@ if __name__ == "__main__":
 
 ---
 
-## 11. Project Structure
+## 13. Project Structure
 
 ```
 docconnect/
@@ -2440,15 +2982,25 @@ docconnect/
 │   ├── schemas.py             # Shared Pydantic models
 │   ├── routers/               # API routers
 │   │   ├── __init__.py
+│   │   ├── admin.py           # Admin CRM: verification, users, reports, moderation,
+│   │   │                      # communities, audit logs, analytics, settings, matching config
 │   │   ├── auth.py            # Register, Login, OTP, Refresh, Logout
+│   │   ├── availability.py    # Doctor availability + slots
+│   │   ├── billing.py         # Plans, subscriptions, invoices, webhooks, refunds
+│   │   ├── communities.py     # Specialty communities
+│   │   ├── devices.py         # Push notification device tokens
 │   │   ├── doctors.py         # Profile, Search, Qualifications, Experience
 │   │   ├── feed.py            # Home, Posts, Likes, Comments, Replies
+│   │   ├── files.py           # File upload, signed URLs
 │   │   ├── hospitals.py       # Register, Branches, Departments, Staff
 │   │   ├── jobs.py            # Post, Apply, Withdraw, CRM pipeline
-│   │   ├── availability.py    # Doctor availability + slots
-│   │   ├── shifts.py          # Requirements, Requests, Lifecycle
+│   │   ├── masters.py         # Specialties, qualifications, councils, job/shift types
 │   │   ├── messaging.py       # Conversations + Messages
-│   │   └── notifications.py   # List, Read, Unread count
+│   │   ├── network.py         # Connections, follow, block, reports
+│   │   ├── notifications.py   # List, Read, Unread count, preferences
+│   │   ├── search.py          # Universal search
+│   │   ├── shifts.py          # Requirements, Requests, Lifecycle
+│   │   └── support.py         # Support tickets + admin ticket management
 │   └── middleware/
 │       ├── __init__.py
 │       ├── auth.py
@@ -2463,7 +3015,10 @@ docconnect/
 │   ├── shifts/                # ShiftRequirement, ShiftRequest
 │   ├── messaging/             # Conversation, ConversationParticipant, Message
 │   ├── notifications/         # Notification
-│   └── core/                  # Encryption, SMS, S3 storage services
+│   └── core/                  # Community, CommunityMember, AuditLog, Report,
+│                              # SupportTicket, SupportMessage, MatchingConfig,
+│                              # Specialization, Qualification, Council
+│                              # + services: Encryption, SMS, S3 storage
 │
 ├── tests/
 │   ├── conftest.py
@@ -2485,19 +3040,19 @@ docconnect/
 
 ---
 
-## 12. Development Setup
+## 14. Development Setup
 
-### 12.1 Prerequisites
+### 14.1 Prerequisites
 
 - Python 3.11+ (3.13 / 3.14 also tested on Windows)
 - PostgreSQL 16+
 - Redis 7.2+
 
-### 12.2 Installation Steps
+### 14.2 Installation Steps
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/yourusername/docconnect.git
+git clone https://github.com/pkdubey/docconnect.git
 cd docconnect
 
 # 2. Create virtual environment
@@ -2537,7 +3092,7 @@ python run.py
 celery -A docconnect_backend worker -l info
 ```
 
-### 12.3 All URLs
+### 14.3 All URLs
 
 | URL | Description |
 |-----|-------------|
@@ -2548,7 +3103,7 @@ celery -A docconnect_backend worker -l info
 | http://localhost:8000/health | Health check |
 | http://localhost:8000/admin/ | Django Admin panel |
 
-### 12.4 Super Admin Credentials
+### 14.4 Super Admin Credentials
 
 | Field | Value |
 |-------|-------|
@@ -2558,7 +3113,7 @@ celery -A docconnect_backend worker -l info
 
 > **Note:** Change password immediately in production via Django Admin → Users.
 
-### 12.5 Python 3.14 Compatibility Notes
+### 14.5 Python 3.14 Compatibility Notes
 
 If you are on Python 3.14 (Windows), the following pinned versions are required in `requirements.txt` — they ship pre-built wheels for 3.14:
 
@@ -2570,7 +3125,7 @@ fastapi==0.115.12
 uvicorn[standard]==0.34.3
 ```
 
-### 12.6 Docker Setup
+### 14.6 Docker Setup
 
 ```bash
 # Build and run with Docker Compose
@@ -2588,9 +3143,9 @@ docker-compose logs -f
 
 ---
 
-## 13. Deployment
+## 15. Deployment
 
-### 13.1 Environment Variables
+### 15.1 Environment Variables
 
 ```bash
 # .env.example
@@ -2650,7 +3205,7 @@ NMC_API_BASE_URL=https://api.nmc.org.in
 NMC_API_KEY=<nmc-api-key>
 ```
 
-### 13.2 Production Deployment
+### 15.2 Production Deployment
 
 ```bash
 # Build production Docker images
@@ -2674,15 +3229,15 @@ docker-compose -f docker-compose.production.yml exec backend python manage.py co
 
 ---
 
-## 14. API Documentation
+## 16. API Documentation
 
-### 14.1 Access Swagger UI
+### 16.1 Access Swagger UI
 
 - **Swagger UI**: `http://localhost:8000/api/docs`
 - **ReDoc**: `http://localhost:8000/api/redoc`
 - **OpenAPI JSON**: `http://localhost:8000/api/openapi.json`
 
-### 14.2 Complete API Reference
+### 16.2 Complete API Reference
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -2906,9 +3461,9 @@ docker-compose -f docker-compose.production.yml exec backend python manage.py co
 
 ---
 
-## 15. Security
+## 17. Security
 
-### 15.1 Authentication Flow
+### 17.1 Authentication Flow
 
 ```
 ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
@@ -2923,7 +3478,7 @@ docker-compose -f docker-compose.production.yml exec backend python manage.py co
                                               └─────────────┘
 ```
 
-### 15.2 Security Features
+### 17.2 Security Features
 
 ```python
 # Security headers middleware
@@ -2964,7 +3519,7 @@ app.add_middleware(
 )
 ```
 
-### 15.3 Data Encryption
+### 17.3 Data Encryption
 
 ```python
 # core/encryption.py
@@ -2993,9 +3548,9 @@ class DataEncryption:
 
 ---
 
-## 16. Testing
+## 18. Testing
 
-### 16.1 Running Tests
+### 18.1 Running Tests
 
 ```bash
 # Run all tests
@@ -3011,7 +3566,7 @@ pytest --cov=fastapi_app --cov=apps tests/
 pytest --cov=fastapi_app --cov=apps --cov-report=html tests/
 ```
 
-### 16.2 Test Example
+### 18.2 Test Example
 
 ```python
 # tests/test_auth.py
@@ -3040,9 +3595,9 @@ def test_verify_otp_invalid():
 
 ---
 
-## 17. Troubleshooting
+## 19. Troubleshooting
 
-### 17.1 Common Issues
+### 19.1 Common Issues
 
 | Problem | Cause | Fix |
 |---------|-------|-----|
@@ -3053,7 +3608,7 @@ def test_verify_otp_invalid():
 | `postgis` extension missing | PostGIS not installed | `sudo apt install postgresql-16-postgis-3` |
 | OTP SMS not delivered | Invalid `SMS_API_KEY` | Check provider dashboard for key validity |
 
-### 17.2 Logs
+### 19.2 Logs
 
 ```bash
 # Django logs
@@ -3071,7 +3626,7 @@ docker-compose logs -f
 
 ---
 
-## 18. Roadmap
+## 20. Roadmap
 
 ### Phase 1 — MVP (Current ✅)
 - [x] Phone + password registration & login
@@ -3105,15 +3660,39 @@ docker-compose logs -f
 - [x] Notifications (list, read, unread count, preferences)
 - [x] File upload with signed URLs (photos, logos, credentials)
 - [x] Universal search (doctors / hospitals / jobs / communities)
-- [x] Reports (profile/post/comment/job/hospital)
+- [x] Reports — DB-backed `Report` model with severity, reason codes, lifecycle
 - [x] Django Admin panel
 - [x] Docker Compose setup
-
-### Phase 2 — Q3 2026
-- [ ] Admin CRM — verification queue, moderation, reports, restrictions, audit logs
-- [ ] Support ticket system
-- [ ] Analytics dashboard (operational metrics)
-- [ ] Push notifications via Firebase FCM
+- [x] **Admin CRM — verification queues with turnaround time**
+- [x] **Admin CRM — user management (restrict/suspend/restore/deactivate) with reason + AuditLog**
+- [x] **Admin CRM — content moderation (posts/jobs) with reason + AuditLog**
+- [x] **Admin CRM — reports queue with severity/target_type filters + action/dismiss/escalate**
+- [x] **Admin CRM — community management with AuditLog**
+- [x] **Admin CRM — audit logs with action/target_type filters**
+- [x] **Admin CRM — full operational analytics (turnaround, funnel, shift rates, resolution time)**
+- [x] **Admin CRM — support tickets (DB-backed SupportTicket/SupportMessage, internal notes)**
+- [x] **Admin CRM — matching config management (versioned weights, activate)**
+- [x] **Admin CRM — settings CRUD (specialties, qualifications)**
+- [x] **Module 6 — Doctor Mobile App spec: navigation, onboarding flow, verification-gated actions**
+- [x] **Module 6 — `languages` + `career_preferences` fields on DoctorProfile**
+- [x] **Module 6 — CASE post patient-privacy confirmation required (`patient_privacy_confirmed`)**
+- [x] **Module 6 — Server-side PII detection on posts (phone/Aadhaar/email/patient ID)**
+- [x] **Module 6 — `match_score` + `match_factors` returned on job list for doctors**
+- [x] **Module 6 — Slot overlap check against accepted/confirmed shifts (409)**
+- [x] **Module 6 — Deactivate availability blocked if active shift requests exist (409)**
+- [x] **Module 6 — Account deletion cascades: withdraw applications, deactivate availability, cancel shift requests**
+- [x] **Spec 02 — `DoctorAffiliation` model with proper DB table (replaces JSONB metadata)**
+- [x] **Spec 02 — `Follow` model (DB-backed doctor/hospital follow relationship)**
+- [x] **Spec 02 — `Block` model (DB-backed user block; replaces metadata array)**
+- [x] **Spec 02 — `JobSave` model (DB-backed job saves; replaces metadata array)**
+- [x] **Spec 02 — `ShiftStatusHistory` model (immutable shift state audit trail)**
+- [x] **Spec 02 — `DeviceToken` model (FCM/APNs push tokens per device)**
+- [x] **Spec 02 — `NotificationPreference` model (per-user per-event channel preferences)**
+- [x] **Spec 02 — `Plan` / `Subscription` / `Entitlement` billing models**
+- [x] **Spec 02 — `Invoice` / `Payment` billing models with provider ID + refund tracking**
+- [x] **Spec 02 — Privacy enforcement rules documented and enforced at query/serialization layer**
+- [x] **Spec 02 — Security & infrastructure checklist documented**
+- [x] **Spec 02 — API contract standard (method, auth role, schema, errors, pagination, side effects, audit event)**
 - [ ] Specialty communities & group discussions
 - [ ] Hospital verification via document OCR
 - [ ] CME credit tracking
@@ -3130,9 +3709,9 @@ docker-compose logs -f
 
 ---
 
-## 19. Contributing
+## 21. Contributing
 
-### 19.1 Development Guidelines
+### 21.1 Development Guidelines
 
 1. **Code Style**
    - Python: Black, isort, flake8
@@ -3152,7 +3731,7 @@ docker-compose logs -f
    - `test:` Tests
    - `refactor:` Code refactor
 
-### 19.2 Pull Request Process
+### 21.2 Pull Request Process
 
 1. Fork the repository
 2. Create feature branch
@@ -3180,4 +3759,4 @@ This project is proprietary and confidential. Unauthorized copying, distribution
 
 ---
 
-*Last updated: September 2026 | Version 2.0 | Maintained by Pavan Kumar Dubey*
+*Last updated: September 2026 | Version 2.2 | Maintained by Pavan Kumar Dubey*
