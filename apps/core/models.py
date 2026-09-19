@@ -147,6 +147,31 @@ class Report(models.Model):
         return f"Report({self.target_type}:{self.target_id}) by {self.reporter_id}"
 
 
+class ReportEvidence(models.Model):
+    """Evidence files attached to a report. Access via signed URLs only — never public."""
+    EVIDENCE_TYPES = [
+        ('SCREENSHOT', 'Screenshot'),
+        ('DOCUMENT', 'Document'),
+        ('OTHER', 'Other'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    report = models.ForeignKey(Report, on_delete=models.CASCADE, related_name='evidence')
+    evidence_file_id = models.UUIDField()  # references file in private S3 storage
+    evidence_type = models.CharField(max_length=20, choices=EVIDENCE_TYPES, default='SCREENSHOT')
+    uploaded_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'report_evidence'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Evidence({self.evidence_type}) for Report({self.report_id})"
+
+
 class SupportTicket(models.Model):
     CATEGORY_CHOICES = [
         ('GENERAL', 'General'), ('VERIFICATION', 'Verification'),

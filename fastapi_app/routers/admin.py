@@ -4,17 +4,12 @@ from asgiref.sync import sync_to_async
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from fastapi_app.dependencies import get_current_user
+from fastapi_app.dependencies import get_current_user, require_admin, require_super_admin
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin CRM"])
 
 
 # ── Helpers ───────────────────────────────────────────────────
-
-def _require_admin(current_user):
-    if current_user.user_type != 'ADMIN':
-        raise HTTPException(status_code=403, detail="Admin access required")
-
 
 def _write_audit(performed_by, action: str, target_type: str = None, target_id=None, metadata: dict = None):
     """Write an AuditLog entry synchronously (call inside sync_to_async blocks)."""
@@ -74,7 +69,7 @@ class SuccessOut(BaseModel):
 
 @router.get("/dashboard/")
 async def admin_dashboard(current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _stats():
         from apps.accounts.models import User
@@ -113,7 +108,7 @@ async def doctor_verification_queue(
     page_size: int = Query(20, ge=1, le=100),
     current_user=Depends(get_current_user),
 ):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _list():
         from apps.doctors.models import DoctorProfile
@@ -138,7 +133,7 @@ async def doctor_verification_queue(
 
 @router.get("/doctors/verification-cases/{case_id}/")
 async def doctor_verification_case(case_id: str, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _get():
         from apps.doctors.models import DoctorProfile
@@ -168,7 +163,7 @@ async def doctor_verification_case(case_id: str, current_user=Depends(get_curren
 
 @router.post("/doctors/verification-cases/{case_id}/approve/", response_model=SuccessOut)
 async def approve_doctor_verification(case_id: str, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _approve():
         from apps.doctors.models import DoctorProfile
@@ -188,7 +183,7 @@ async def approve_doctor_verification(case_id: str, current_user=Depends(get_cur
 async def reject_doctor_verification(
     case_id: str, body: VerificationActionBody, current_user=Depends(get_current_user)
 ):
-    _require_admin(current_user)
+    require_admin(current_user)
     if not body.reason:
         raise HTTPException(status_code=400, detail="Reason is required for rejection")
 
@@ -212,7 +207,7 @@ async def reject_doctor_verification(
 
 @router.post("/doctors/verification-cases/{case_id}/resubmit/", response_model=SuccessOut)
 async def allow_doctor_resubmit(case_id: str, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _resubmit():
         from apps.doctors.models import DoctorProfile
@@ -238,7 +233,7 @@ async def hospital_verification_queue(
     page_size: int = Query(20, ge=1, le=100),
     current_user=Depends(get_current_user),
 ):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _list():
         from apps.hospitals.models import Hospital
@@ -262,7 +257,7 @@ async def hospital_verification_queue(
 
 @router.post("/hospitals/verification-cases/{case_id}/approve/", response_model=SuccessOut)
 async def approve_hospital_verification(case_id: str, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
     from django.utils import timezone
 
     def _approve():
@@ -285,7 +280,7 @@ async def approve_hospital_verification(case_id: str, current_user=Depends(get_c
 async def reject_hospital_verification(
     case_id: str, body: VerificationActionBody, current_user=Depends(get_current_user)
 ):
-    _require_admin(current_user)
+    require_admin(current_user)
     if not body.reason:
         raise HTTPException(status_code=400, detail="Reason is required for rejection")
 
@@ -315,7 +310,7 @@ async def list_all_users(
     page_size: int = Query(20, ge=1, le=100),
     current_user=Depends(get_current_user),
 ):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _list():
         from django.contrib.auth import get_user_model
@@ -343,15 +338,20 @@ async def list_all_users(
 def _update_user_status_with_audit(user_id: str, status: str, performed_by, reason: str = None):
     from django.contrib.auth import get_user_model
     User = get_user_model()
-    updated = User.objects.filter(id=user_id).update(status=status)
-    if not updated:
+    # Platform Admin must not be able to restrict/suspend/deactivate a Super Admin.
+    target = User.objects.filter(id=user_id).first()
+    if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if target.is_super_admin and not performed_by.is_super_admin:
+        raise HTTPException(status_code=403, detail="Platform Admin cannot modify a Super Admin account")
+    target.status = status
+    target.save(update_fields=['status'])
     _write_audit(performed_by, f'USER_{status}', 'User', user_id, {"reason": reason})
 
 
 @router.post("/users/{user_id}/restrict/", response_model=SuccessOut)
 async def restrict_user(user_id: str, body: UserActionBody, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
     try:
         await sync_to_async(_update_user_status_with_audit, thread_sensitive=True)(
             user_id, 'INACTIVE', current_user, body.reason
@@ -363,7 +363,7 @@ async def restrict_user(user_id: str, body: UserActionBody, current_user=Depends
 
 @router.post("/users/{user_id}/suspend/", response_model=SuccessOut)
 async def suspend_user(user_id: str, body: UserActionBody, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
     try:
         await sync_to_async(_update_user_status_with_audit, thread_sensitive=True)(
             user_id, 'SUSPENDED', current_user, body.reason
@@ -375,7 +375,7 @@ async def suspend_user(user_id: str, body: UserActionBody, current_user=Depends(
 
 @router.post("/users/{user_id}/restore/", response_model=SuccessOut)
 async def restore_user(user_id: str, body: UserActionBody, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
     try:
         await sync_to_async(_update_user_status_with_audit, thread_sensitive=True)(
             user_id, 'ACTIVE', current_user, body.reason
@@ -387,7 +387,7 @@ async def restore_user(user_id: str, body: UserActionBody, current_user=Depends(
 
 @router.post("/users/{user_id}/deactivate/", response_model=SuccessOut)
 async def deactivate_user(user_id: str, body: UserActionBody, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
     try:
         await sync_to_async(_update_user_status_with_audit, thread_sensitive=True)(
             user_id, 'DELETED', current_user, body.reason
@@ -408,7 +408,7 @@ async def list_reports(
     page_size: int = Query(20, ge=1, le=100),
     current_user=Depends(get_current_user),
 ):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _list():
         from apps.core.models import Report
@@ -436,7 +436,7 @@ async def list_reports(
 
 @router.get("/reports/{report_id}/")
 async def get_report_detail(report_id: str, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _get():
         from apps.core.models import Report
@@ -461,7 +461,7 @@ async def get_report_detail(report_id: str, current_user=Depends(get_current_use
 
 @router.post("/reports/{report_id}/action/", response_model=SuccessOut)
 async def action_report(report_id: str, body: ReportActionBody, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
     from django.utils import timezone
 
     def _action():
@@ -489,17 +489,20 @@ async def action_report(report_id: str, body: ReportActionBody, current_user=Dep
 
 @router.post("/reports/{report_id}/dismiss/", response_model=SuccessOut)
 async def dismiss_report(report_id: str, body: ReportActionBody, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
     from django.utils import timezone
 
     def _dismiss():
         from apps.core.models import Report
-        updated = Report.objects.filter(id=report_id).update(
-            status='DISMISSED', reviewed_by=current_user,
-            resolution_notes=body.action_notes, resolved_at=timezone.now()
-        )
-        if not updated:
+        try:
+            r = Report.objects.get(id=report_id)
+        except Report.DoesNotExist:
             raise HTTPException(status_code=404, detail="Report not found")
+        r.status = 'DISMISSED'
+        r.reviewed_by = current_user
+        r.resolution_notes = body.action_notes
+        r.resolved_at = timezone.now()
+        r.save(update_fields=['status', 'reviewed_by', 'resolution_notes', 'resolved_at'])
         _write_audit(current_user, 'REPORT_DISMISSED', 'Report', report_id)
 
     try:
@@ -511,16 +514,18 @@ async def dismiss_report(report_id: str, body: ReportActionBody, current_user=De
 
 @router.post("/reports/{report_id}/escalate/", response_model=SuccessOut)
 async def escalate_report(report_id: str, body: ReportActionBody, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _escalate():
         from apps.core.models import Report
-        updated = Report.objects.filter(id=report_id).update(
-            status='ESCALATED', reviewed_by=current_user,
-            resolution_notes=body.action_notes
-        )
-        if not updated:
+        try:
+            r = Report.objects.get(id=report_id)
+        except Report.DoesNotExist:
             raise HTTPException(status_code=404, detail="Report not found")
+        r.status = 'ESCALATED'
+        r.reviewed_by = current_user
+        r.resolution_notes = body.action_notes
+        r.save(update_fields=['status', 'reviewed_by', 'resolution_notes'])
         _write_audit(current_user, 'REPORT_ESCALATED', 'Report', report_id)
 
     try:
@@ -534,7 +539,7 @@ async def escalate_report(report_id: str, body: ReportActionBody, current_user=D
 
 @router.post("/posts/{post_id}/moderate/", response_model=SuccessOut)
 async def moderate_post(post_id: str, body: ModerationBody, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _moderate():
         from apps.doctors.models import Post
@@ -560,7 +565,7 @@ async def moderate_post(post_id: str, body: ModerationBody, current_user=Depends
 
 @router.post("/jobs/{job_id}/moderate/", response_model=SuccessOut)
 async def moderate_job(job_id: str, body: ModerationBody, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _moderate():
         from apps.jobs.models import JobPost
@@ -581,10 +586,15 @@ async def moderate_job(job_id: str, body: ModerationBody, current_user=Depends(g
 
 
 # ── Community Management ──────────────────────────────────────
+# NOTE: Community moderator management (add/remove moderators) is Phase 2.
+# The CommunityMember model does not yet have a role/is_moderator field.
+# Endpoints: POST /admin/communities/{id}/moderators/ and
+#            DELETE /admin/communities/{id}/moderators/{user_id}/
+# will be implemented in Phase 2 when the CommunityMember model is extended.
 
 @router.post("/communities/", status_code=201)
 async def create_community(body: CommunityCreate, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _create():
         from apps.core.models import Community
@@ -604,7 +614,7 @@ async def create_community(body: CommunityCreate, current_user=Depends(get_curre
 
 @router.patch("/communities/{community_id}/")
 async def update_community(community_id: str, body: CommunityCreate, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _update():
         from apps.core.models import Community
@@ -628,7 +638,7 @@ async def update_community(community_id: str, body: CommunityCreate, current_use
 
 @router.post("/communities/{community_id}/archive/", response_model=SuccessOut)
 async def archive_community(community_id: str, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _archive():
         from apps.core.models import Community
@@ -654,7 +664,7 @@ async def audit_logs(
     page_size: int = Query(20, ge=1, le=100),
     current_user=Depends(get_current_user),
 ):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _list():
         from apps.core.models import AuditLog
@@ -687,7 +697,7 @@ async def audit_logs(
 
 @router.get("/analytics/overview/")
 async def analytics_overview(current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _analytics():
         from django.db.models import Avg, Count, F, ExpressionWrapper, DurationField
@@ -811,7 +821,7 @@ async def analytics_overview(current_user=Depends(get_current_user)):
 
 @router.post("/settings/specialties/", status_code=201)
 async def create_specialty(body: SettingUpdate, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _create():
         from apps.core.models import Specialization
@@ -832,7 +842,7 @@ async def create_specialty(body: SettingUpdate, current_user=Depends(get_current
 
 @router.patch("/settings/specialties/{specialty_id}/")
 async def update_specialty(specialty_id: str, body: SettingUpdate, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _update():
         from apps.core.models import Specialization
@@ -852,7 +862,7 @@ async def update_specialty(specialty_id: str, body: SettingUpdate, current_user=
 
 @router.post("/settings/qualifications/", status_code=201)
 async def create_qualification(body: SettingUpdate, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _create():
         from apps.core.models import Qualification
@@ -875,7 +885,7 @@ async def create_qualification(body: SettingUpdate, current_user=Depends(get_cur
 
 @router.get("/matching-configs/")
 async def list_matching_configs(current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_admin(current_user)
 
     def _list():
         from apps.core.models import MatchingConfig
@@ -893,7 +903,7 @@ async def list_matching_configs(current_user=Depends(get_current_user)):
 
 @router.post("/matching-configs/", status_code=201)
 async def create_matching_config(body: MatchingConfigCreate, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_super_admin(current_user)
 
     def _create():
         from apps.core.models import MatchingConfig
@@ -916,7 +926,7 @@ async def create_matching_config(body: MatchingConfigCreate, current_user=Depend
 
 @router.post("/matching-configs/{config_id}/activate/", response_model=SuccessOut)
 async def activate_matching_config(config_id: str, current_user=Depends(get_current_user)):
-    _require_admin(current_user)
+    require_super_admin(current_user)
 
     def _activate():
         from apps.core.models import MatchingConfig
@@ -932,3 +942,99 @@ async def activate_matching_config(config_id: str, current_user=Depends(get_curr
     except HTTPException:
         raise
     return SuccessOut(success=True, message="Matching config activated")
+
+
+# ── Super Admin — Admin User Management ──────────────────────
+# Only Super Admin can create/deactivate/modify admin accounts.
+# Platform Admin (is_super_admin=False) is blocked from these endpoints.
+
+class AdminUserCreate(BaseModel):
+    phone: str
+    is_super_admin: bool = False
+
+
+@router.post("/super/admin-users/", status_code=201, response_model=SuccessOut,
+             summary="Super Admin: create a Platform Admin or Super Admin user")
+async def create_admin_user(body: AdminUserCreate, current_user=Depends(get_current_user)):
+    require_super_admin(current_user)
+
+    def _create():
+        import secrets
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        if User.objects.filter(phone=body.phone).exists():
+            raise HTTPException(status_code=409, detail="Phone already registered")
+        temp_password = secrets.token_urlsafe(16)
+        user = User.objects.create_user(
+            phone=body.phone,
+            user_type='ADMIN',
+            password=temp_password,
+            is_staff=True,
+            is_super_admin=body.is_super_admin,
+        )
+        _write_audit(current_user, 'ADMIN_USER_CREATED', 'User', str(user.id),
+                     {"phone": body.phone, "is_super_admin": body.is_super_admin})
+        return temp_password
+
+    try:
+        temp_password = await sync_to_async(_create, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    # Temporary password returned once — must be changed on first login
+    return SuccessOut(
+        success=True,
+        message=f"Admin user created. Temporary password (change immediately): {temp_password}"
+    )
+
+
+@router.post("/super/admin-users/{user_id}/deactivate/", response_model=SuccessOut,
+             summary="Super Admin: deactivate an admin user")
+async def deactivate_admin_user(
+    user_id: str, body: UserActionBody, current_user=Depends(get_current_user)
+):
+    require_super_admin(current_user)
+    if str(current_user.id) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
+
+    def _deactivate():
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        updated = User.objects.filter(id=user_id, user_type='ADMIN').update(
+            status='DELETED', is_active=False
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Admin user not found")
+        _write_audit(current_user, 'ADMIN_USER_DEACTIVATED', 'User', user_id, {"reason": body.reason})
+
+    try:
+        await sync_to_async(_deactivate, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return SuccessOut(success=True, message="Admin user deactivated")
+
+
+@router.patch("/super/admin-users/{user_id}/permissions/", response_model=SuccessOut,
+              summary="Super Admin: update admin user is_super_admin flag")
+async def update_admin_permissions(
+    user_id: str, body: AdminUserCreate, current_user=Depends(get_current_user)
+):
+    require_super_admin(current_user)
+    if str(current_user.id) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot modify your own permissions")
+
+    def _update():
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        updated = User.objects.filter(id=user_id, user_type='ADMIN').update(
+            is_super_admin=body.is_super_admin
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Admin user not found")
+        _write_audit(current_user, 'ADMIN_PERMISSIONS_UPDATED', 'User', user_id,
+                     {"is_super_admin": body.is_super_admin})
+
+    try:
+        await sync_to_async(_update, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return SuccessOut(success=True, message="Admin permissions updated")

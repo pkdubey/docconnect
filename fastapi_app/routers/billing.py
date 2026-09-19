@@ -37,6 +37,9 @@ def _get_hospital(current_user):
 
 @router.get("/api/v1/billing/plans/")
 async def list_billing_plans(current_user=Depends(get_current_user)):
+    # Billing is Hospital Admin only — HR/Recruiter/Doctor must not access
+    if current_user.user_type not in ('HOSPITAL_ADMIN', 'ADMIN'):
+        raise HTTPException(status_code=403, detail="Hospital Admin access required")
     return {"results": PLANS}
 
 

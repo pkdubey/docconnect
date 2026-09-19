@@ -50,3 +50,20 @@ async def get_current_doctor(current_user=Depends(get_current_user)):
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor profile not found")
     return profile
+
+
+def require_admin(user):
+    """Require Platform Admin or Super Admin. Raises 403 otherwise."""
+    if user.user_type != 'ADMIN':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+
+def require_super_admin(user):
+    """
+    Require Super Admin (user_type='ADMIN' AND is_super_admin=True).
+    Used for high-risk/irreversible actions: admin user management,
+    matching config activation, billing config, sensitive data export.
+    Platform Admin cannot call Super Admin endpoints.
+    """
+    if user.user_type != 'ADMIN' or not user.is_super_admin:
+        raise HTTPException(status_code=403, detail="Super Admin access required")

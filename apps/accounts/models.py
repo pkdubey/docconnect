@@ -23,6 +23,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(max_length=15, unique=True)
     email = models.EmailField(unique=True, null=True, blank=True)
     user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES)
+    # Explicit Super Admin flag — separate from Django is_superuser.
+    # Super Admin has all Platform Admin permissions PLUS irreversible/high-risk actions.
+    # Platform Admin (is_super_admin=False, user_type='ADMIN') cannot modify Super Admin accounts.
+    is_super_admin = models.BooleanField(default=False)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)

@@ -20,6 +20,9 @@ class Hospital(models.Model):
     name = models.CharField(max_length=255)
     type = models.CharField(max_length=50, choices=TYPE_CHOICES)
     logo_file_id = models.UUIDField(null=True, blank=True)
+    # DEPRECATED: logo_base64 is a legacy dev-only field.
+    # Production path uses logo_file_id with private S3 storage.
+    # Do not write new data to this field. Will be removed in a future migration.
     logo_base64 = models.TextField(null=True, blank=True)
     about = models.TextField(null=True, blank=True)
     location = models.JSONField()
@@ -106,6 +109,8 @@ class HospitalUser(models.Model):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     designation = models.CharField(max_length=100, null=True, blank=True)
     department = models.ForeignKey(HospitalDepartment, on_delete=models.SET_NULL, null=True, blank=True)
+    # Custom per-user permission overrides (optional; product decision required before use)
+    permissions = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

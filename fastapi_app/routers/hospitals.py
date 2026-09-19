@@ -157,23 +157,39 @@ class LogoUploadOut(BaseModel):
     file_id: str
 
 
-# ── Helper ────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────
 
 def _hospital_dict(h) -> HospitalOut:
     return HospitalOut(
-        id=str(h.id),
-        name=h.name,
-        type=h.type,
-        about=h.about,
-        location=h.location or {},
-        bed_count=h.bed_count,
-        phone=h.phone,
-        email=h.email,
-        website=h.website,
+        id=str(h.id), name=h.name, type=h.type, about=h.about,
+        location=h.location or {}, bed_count=h.bed_count,
+        phone=h.phone, email=h.email, website=h.website,
         verification_status=h.verification_status,
         logo_file_id=str(h.logo_file_id) if h.logo_file_id else None,
         created_at=h.created_at.isoformat(),
     )
+
+
+def _get_active_admin_hu(current_user):
+    """Return HospitalUser for an ACTIVE ADMIN. Raises 403 otherwise."""
+    from apps.hospitals.models import HospitalUser
+    try:
+        return HospitalUser.objects.select_related('hospital').get(
+            user=current_user, role='ADMIN', status='ACTIVE'
+        )
+    except HospitalUser.DoesNotExist:
+        raise HTTPException(status_code=403, detail="Not an active hospital admin")
+
+
+def _get_active_hu(current_user):
+    """Return any ACTIVE HospitalUser. Raises 404 otherwise."""
+    from apps.hospitals.models import HospitalUser
+    try:
+        return HospitalUser.objects.select_related('hospital').get(
+            user=current_user, status='ACTIVE'
+        )
+    except HospitalUser.DoesNotExist:
+        raise HTTPException(status_code=404, detail="No active hospital membership found")
 
 
 # ── Endpoints ─────────────────────────────────────────────────
@@ -206,29 +222,22 @@ async def register_hospital(data: HospitalRegisterRequest, current_user=Depends(
 
 @router.get("/me/", response_model=HospitalOut, summary="Get my hospital profile")
 async def get_my_hospital(current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalUser
-
     def _get():
-        try:
-            return HospitalUser.objects.select_related('hospital').get(user=current_user)
-        except HospitalUser.DoesNotExist:
-            return None
+        return _get_active_hu(current_user)
 
-    hu = await sync_to_async(_get, thread_sensitive=True)()
-    if hu is None:
-        raise HTTPException(status_code=404, detail="No hospital found")
+    try:
+        hu = await sync_to_async(_get, thread_sensitive=True)()
+    except HTTPException:
+        raise
     return _hospital_dict(hu.hospital)
 
 
 @router.post("/me/branches/", response_model=BranchCreateOut, status_code=201, summary="Add a branch")
 async def add_branch(branch: HospitalBranchCreate, current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalBranch, HospitalUser
+    from apps.hospitals.models import HospitalBranch
 
     def _create():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        hu = _get_active_admin_hu(current_user)
         return HospitalBranch.objects.create(
             hospital=hu.hospital, name=branch.name,
             location=branch.location.model_dump(), phone=branch.phone, is_primary=branch.is_primary,
@@ -243,13 +252,8 @@ async def add_branch(branch: HospitalBranchCreate, current_user=Depends(get_curr
 
 @router.get("/me/branches/", response_model=List[BranchOut], summary="List branches")
 async def list_branches(current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalUser
-
     def _list():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user)
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=404, detail="No hospital found")
+        hu = _get_active_hu(current_user)
         return list(hu.hospital.branches.all())
 
     try:
@@ -262,14 +266,13 @@ async def list_branches(current_user=Depends(get_current_user)):
 
 @router.post("/me/departments/", response_model=DepartmentCreateOut, status_code=201, summary="Add a department")
 async def add_department(dept: HospitalDepartmentCreate, current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalDepartment, HospitalUser
+    from apps.hospitals.models import HospitalDepartment
 
     def _create():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
-        return HospitalDepartment.objects.create(hospital=hu.hospital, branch_id=dept.branch_id, name=dept.name)
+        hu = _get_active_admin_hu(current_user)
+        return HospitalDepartment.objects.create(
+            hospital=hu.hospital, branch_id=dept.branch_id, name=dept.name
+        )
 
     try:
         d = await sync_to_async(_create, thread_sensitive=True)()
@@ -280,13 +283,8 @@ async def add_department(dept: HospitalDepartmentCreate, current_user=Depends(ge
 
 @router.get("/me/departments/", response_model=List[DepartmentOut], summary="List departments")
 async def list_departments(current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalUser
-
     def _list():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user)
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=404, detail="No hospital found")
+        hu = _get_active_hu(current_user)
         return list(hu.hospital.departments.all())
 
     try:
@@ -303,10 +301,7 @@ async def invite_hospital_user(invite: HospitalUserInvite, current_user=Depends(
     from apps.hospitals.models import HospitalUser
 
     def _invite():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        hu = _get_active_admin_hu(current_user)
         User = get_user_model()
         invited, _ = User.objects.get_or_create(
             phone=invite.phone,
@@ -316,7 +311,8 @@ async def invite_hospital_user(invite: HospitalUserInvite, current_user=Depends(
             raise HTTPException(status_code=409, detail="User already in a hospital")
         HospitalUser.objects.create(
             user=invited, hospital=hu.hospital, role=invite.role.value,
-            designation=invite.designation, branch_id=invite.branch_id, department_id=invite.department_id,
+            designation=invite.designation, branch_id=invite.branch_id,
+            department_id=invite.department_id,
         )
         return invite.phone, invite.role.value
 
@@ -332,10 +328,7 @@ async def list_staff(current_user=Depends(get_current_user)):
     from apps.hospitals.models import HospitalUser
 
     def _list():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        hu = _get_active_admin_hu(current_user)
         return list(HospitalUser.objects.filter(hospital=hu.hospital).select_related('user'))
 
     try:
@@ -349,16 +342,12 @@ async def list_staff(current_user=Depends(get_current_user)):
 @router.post("/me/upload-logo/", response_model=LogoUploadOut, summary="Upload hospital logo")
 async def upload_logo(file: UploadFile = File(...), current_user=Depends(get_current_user)):
     from apps.core.services.storage import upload_file_to_s3
-    from apps.hospitals.models import HospitalUser
 
-    def _get_hospital():
-        try:
-            return HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+    def _get_hu():
+        return _get_active_admin_hu(current_user)
 
     try:
-        hu = await sync_to_async(_get_hospital, thread_sensitive=True)()
+        hu = await sync_to_async(_get_hu, thread_sensitive=True)()
     except HTTPException:
         raise
 
@@ -385,13 +374,8 @@ class HospitalUpdate(BaseModel):
 
 @router.patch("/me/", response_model=HospitalOut, summary="Update hospital profile")
 async def update_hospital(data: HospitalUpdate, current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalUser
-
     def _update():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        hu = _get_active_admin_hu(current_user)
         h = hu.hospital
         if data.name:
             h.name = data.name
@@ -419,13 +403,8 @@ async def update_hospital(data: HospitalUpdate, current_user=Depends(get_current
 
 @router.post("/me/verification/submit/", summary="Submit hospital verification documents")
 async def submit_hospital_verification(current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalUser
-
     def _submit():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        hu = _get_active_admin_hu(current_user)
         h = hu.hospital
         if h.verification_status not in ('UNVERIFIED', 'REJECTED'):
             raise HTTPException(status_code=400, detail=f"Cannot submit from status: {h.verification_status}")
@@ -442,20 +421,16 @@ async def submit_hospital_verification(current_user=Depends(get_current_user)):
 
 @router.get("/me/verification/", summary="Get hospital verification status")
 async def get_hospital_verification(current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalUser
-
     def _get():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user)
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=404, detail="No hospital found")
+        hu = _get_active_hu(current_user)
         return hu.hospital
 
     try:
         h = await sync_to_async(_get, thread_sensitive=True)()
     except HTTPException:
         raise
-    return {"verification_status": h.verification_status, "verified_at": h.verified_at.isoformat() if h.verified_at else None}
+    return {"verification_status": h.verification_status,
+            "verified_at": h.verified_at.isoformat() if h.verified_at else None}
 
 
 @router.get("/{hospital_id}/", response_model=HospitalOut, summary="View public hospital profile")
@@ -479,13 +454,10 @@ async def get_hospital_public(hospital_id: str, current_user=Depends(get_current
 
 @router.patch("/me/branches/{branch_id}/", response_model=BranchOut, summary="Update branch")
 async def update_branch(branch_id: str, branch: HospitalBranchCreate, current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalBranch, HospitalUser
+    from apps.hospitals.models import HospitalBranch
 
     def _update():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        hu = _get_active_admin_hu(current_user)
         try:
             b = HospitalBranch.objects.get(id=branch_id, hospital=hu.hospital)
         except HospitalBranch.DoesNotExist:
@@ -507,13 +479,10 @@ async def update_branch(branch_id: str, branch: HospitalBranchCreate, current_us
 
 @router.delete("/me/branches/{branch_id}/", status_code=204, summary="Deactivate branch")
 async def delete_branch(branch_id: str, current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalBranch, HospitalUser
+    from apps.hospitals.models import HospitalBranch
 
     def _delete():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        hu = _get_active_admin_hu(current_user)
         deleted = HospitalBranch.objects.filter(id=branch_id, hospital=hu.hospital).delete()[0]
         if not deleted:
             raise HTTPException(status_code=404, detail="Branch not found")
@@ -539,10 +508,7 @@ async def add_hospital_user(invite: HospitalUserInvite, current_user=Depends(get
     from apps.hospitals.models import HospitalUser
 
     def _add():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        hu = _get_active_admin_hu(current_user)
         User = get_user_model()
         user, _ = User.objects.get_or_create(
             phone=invite.phone, defaults={'user_type': 'HOSPITAL_HR', 'status': 'ACTIVE'}
@@ -567,10 +533,7 @@ async def list_hospital_users(current_user=Depends(get_current_user)):
     from apps.hospitals.models import HospitalUser
 
     def _list():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        hu = _get_active_admin_hu(current_user)
         return list(HospitalUser.objects.filter(hospital=hu.hospital).select_related('user'))
 
     try:
@@ -586,10 +549,7 @@ async def update_hospital_user(user_id: str, body: HospitalUserUpdate, current_u
     from apps.hospitals.models import HospitalUser
 
     def _update():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        hu = _get_active_admin_hu(current_user)
         try:
             target = HospitalUser.objects.get(user_id=user_id, hospital=hu.hospital)
         except HospitalUser.DoesNotExist:
@@ -616,10 +576,7 @@ async def remove_hospital_user(user_id: str, current_user=Depends(get_current_us
     from apps.hospitals.models import HospitalUser
 
     def _remove():
-        try:
-            hu = HospitalUser.objects.select_related('hospital').get(user=current_user, role='ADMIN')
-        except HospitalUser.DoesNotExist:
-            raise HTTPException(status_code=403, detail="Not a hospital admin")
+        hu = _get_active_admin_hu(current_user)
         deleted = HospitalUser.objects.filter(user_id=user_id, hospital=hu.hospital).delete()[0]
         if not deleted:
             raise HTTPException(status_code=404, detail="User not found")

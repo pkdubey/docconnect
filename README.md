@@ -27,7 +27,8 @@
 18. [Testing](#18-testing)
 19. [Troubleshooting](#19-troubleshooting)
 20. [Roadmap](#20-roadmap)
-21. [Contributing](#21-contributing)
+21. [Gap Audit Final Report](#21-gap-audit-final-report-doc-connect-backend-gap-audit)
+22. [Contributing](#22-contributing)
 
 ---
 
@@ -72,18 +73,18 @@ DocConnect is a verified professional network exclusively for doctors. It provid
 │                    HYBRID ARCHITECTURE                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  ┌──────────────────┐          ┌────────────────────────┐  │
-│  │    Django 5.0+   │          │       FastAPI          │  │
-│  │  (Admin, ORM,    │◄────────►│  (High-Performance     │  │
-│  │   Models, Auth)  │          │   REST API Layer)      │  │
-│  └──────────────────┘          └────────────────────────┘  │
+│  ┌──────────────────┐          ┌────────────────────────┐   │
+│  │    Django 5.0+   │          │       FastAPI          │   │
+│  │  (Admin, ORM,    │◄────────►│  (High-Performance     │   │
+│  │   Models, Auth)  │          │   REST API Layer)      │   │
+│  └──────────────────┘          └────────────────────────┘   │
 │                                                             │
-│  • PostgreSQL 16+ with advanced features                   │
-│  • Async support for high-performance APIs                 │
-│  • Automatic OpenAPI/Swagger documentation                 │
-│  • Type safety with Pydantic                              │
-│  • Django Admin for content management                    │
-│  • Django ORM for database operations                     │
+│  • PostgreSQL 16+ with advanced features                    │
+│  • Async support for high-performance APIs                  │
+│  • Automatic OpenAPI/Swagger documentation                  │
+│  • Type safety with Pydantic                                │
+│  • Django Admin for content management                      │
+│  • Django ORM for database operations                       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -119,7 +120,7 @@ python run.py
 | Django Admin | http://localhost:8000/admin |
 | Health Check | http://localhost:8000/health |
 
-**Super Admin Credentials (local dev):**
+**Super Admin Credentials (⚠️ LOCAL DEVELOPMENT ONLY):**
 
 | Field | Value |
 |-------|-------|
@@ -127,9 +128,19 @@ python run.py
 | Password | `admin123` |
 | User Type | `ADMIN` |
 
-> To create superuser manually:
+> ⚠️ **NEVER use these credentials in production.** Production deployments must use randomly generated credentials passed via `--phone` and `--password` CLI args or environment variables. The deployment pipeline must NOT call `create_admin.py` with default values.
+
+> To create a Platform Admin (dev):
 > ```bash
-> python -c "import django, os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','docconnect_backend.settings.development'); django.setup(); from apps.accounts.models import User; User.objects.create_superuser(phone='9999999999', user_type='ADMIN', password='admin123')"
+> python scripts/create_admin.py
+> ```
+> To create a Super Admin (dev):
+> ```bash
+> python scripts/create_admin.py --super
+> ```
+> To create a Super Admin (production — always pass explicit credentials):
+> ```bash
+> DJANGO_ENV=production python scripts/create_admin.py --phone <phone> --password <strong_password> --super
 > ```
 
 ---
@@ -145,16 +156,16 @@ python run.py
 │                     DOCTOR PROFILE                              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  BANNER  (gradient / custom image)                       │  │
-│  │  ┌──────┐  Dr. Arjun Sharma                              │  │
-│  │  │ 👨‍⚕️  │  Cardiologist · 12 yrs exp                     │  │
-│  │  │ Photo│  AIIMS Delhi · Mumbai                          │  │
-│  │  └──────┘  ✅ NMC Verified  🟢 Open to Opportunities     │  │
-│  └──────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  BANNER  (gradient / custom image)                       │   │
+│  │  ┌──────┐  Dr. Arjun Sharma                              │   │
+│  │  │ 👨‍⚕️  │  Cardiologist · 12 yrs exp                      │   │
+│  │  │ Photo│  AIIMS Delhi · Mumbai                          │   │
+│  │  └──────┘  ✅ NMC Verified  🟢 Open to Opportunities    │   │
+│  └──────────────────────────────────────────────────────────┘   │
 │                                                                 │
 │  About          Qualifications      Experience                  │
-│  Specialization Clinical Interests  Registrations              │
+│  Specialization Clinical Interests  Registrations               │
 │  Connections    Posts & Activity    Availability Badge          │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -525,23 +536,23 @@ Every status change is logged in `ApplicationHistory` with:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    MATCHING ENGINE                       │
+│                    MATCHING ENGINE                          │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  V1 Matching Factors (weights = configurable):            │
-│  • verification status                                    │
-│  • specialization match                                   │
-│  • qualification match                                    │
-│  • experience (years)                                     │
-│  • date availability                                      │
-│  • time availability                                      │
-│  • location / distance                                    │
-│  • preferred radius                                       │
-│  • job type preference                                    │
-│  • professional status                                    │
+│  V1 Matching Factors (weights = configurable):              │
+│  • verification status                                      │
+│  • specialization match                                     │
+│  • qualification match                                      │
+│  • experience (years)                                       │
+│  • date availability                                        │
+│  • time availability                                        │
+│  • location / distance                                      │
+│  • preferred radius                                         │
+│  • job type preference                                      │
+│  • professional status                                      │
 │                                                             │
-│  Output: match_score + score_components[] + reasons[]     │
-│  Config: versioned via matching_configs table             │
+│  Output: match_score + score_components[] + reasons[]       │
+│  Config: versioned via matching_configs table               │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -609,14 +620,14 @@ Every status change is logged in `ApplicationHistory` with:
 │               DOCTOR AVAILABILITY POSTING                   │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  Dr. Priya Mehta — Anesthesiologist                        │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  Type:     LOCUM                                    │   │
-│  │  From:     15 Aug 2025  →  30 Aug 2025              │   │
-│  │  Location: Mumbai, Maharashtra  (50 km radius)      │   │
-│  │  Min Pay:  ₹8,000 / shift                           │   │
-│  │  Slots:    Mon 09:00–17:00  |  Wed 09:00–17:00      │   │
-│  └─────────────────────────────────────────────────────┘   │
+│  Dr. Priya Mehta — Anesthesiologist                         │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  Type:     LOCUM                                    │    │
+│  │  From:     15 Aug 2025  →  30 Aug 2025              │    │
+│  │  Location: Mumbai, Maharashtra  (50 km radius)      │    │
+│  │  Min Pay:  ₹8,000 / shift                           │    │
+│  │  Slots:    Mon 09:00–17:00  |  Wed 09:00–17:00      │    │
+│  └─────────────────────────────────────────────────────┘    │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -642,15 +653,15 @@ Every status change is logged in `ApplicationHistory` with:
 │              HOSPITAL SHIFT REQUIREMENT                     │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  Apollo Hospital, Mumbai — ICU Department                  │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  Specialty:   Anesthesiology                        │   │
-│  │  Date:        18 Aug 2025                           │   │
-│  │  Time:        08:00 – 20:00  (12 hr shift)          │   │
-│  │  Doctors:     2 required                            │   │
-│  │  Pay:         ₹12,000 / shift                       │   │
-│  │  Urgency:     🔴 IMMEDIATE                          │   │
-│  └─────────────────────────────────────────────────────┘   │
+│  Apollo Hospital, Mumbai — ICU Department                   │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  Specialty:   Anesthesiology                        │    │
+│  │  Date:        18 Aug 2025                           │    │
+│  │  Time:        08:00 – 20:00  (12 hr shift)          │    │
+│  │  Doctors:     2 required                            │    │
+│  │  Pay:         ₹12,000 / shift                       │    │
+│  │  Urgency:     🔴 IMMEDIATE                         │     │
+│  └─────────────────────────────────────────────────────┘    │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -678,19 +689,19 @@ Every status change is logged in `ApplicationHistory` with:
 │                   MATCHING ALGORITHM                        │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  Hospital posts ShiftRequirement                           │
+│  Hospital posts ShiftRequirement                            │
 │           │                                                 │
 │           ▼                                                 │
-│  System filters DoctorAvailability where:                  │
-│    • availability_type matches requirement type            │
-│    • available_from ≤ requirement_date ≤ available_until   │
-│    • preferred_location within preferred_radius_km         │
-│    • minimum_compensation ≤ requirement compensation       │
-│    • slot exists for requirement date & time               │
+│  System filters DoctorAvailability where:                   │
+│    • availability_type matches requirement type             │
+│    • available_from ≤ requirement_date ≤ available_until    │
+│    • preferred_location within preferred_radius_km          │
+│    • minimum_compensation ≤ requirement compensation        │
+│    • slot exists for requirement date & time                │
 │           │                                                 │
 │           ▼                                                 │
-│  Matched doctors list returned to hospital                 │
-│  Hospital sends ShiftRequest to selected doctors           │
+│  Matched doctors list returned to hospital                  │
+│  Hospital sends ShiftRequest to selected doctors            │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -776,7 +787,7 @@ Every status change is logged in `ApplicationHistory` with:
 | Hospital Verification | Organization review, documents, approve/reject, branches |
 | User Management | Search, view, restrict, suspend, restore, deactivate — reason required, audit logged |
 | Moderation | Posts/comments/reports — patient privacy concerns, misinformation flags, harassment, reason required |
-| Communities | Create/edit/archive specialty communities, manage moderators |
+| Communities | Create/edit/archive specialty communities, manage moderators (🔜 Phase 2) |
 | Jobs | Monitor jobs, remove policy-violating jobs, investigate suspicious activity |
 | Reports | Case queue, severity, evidence, resolution, escalation |
 | Support | User tickets/issues and internal admin notes |
@@ -1158,7 +1169,7 @@ Build a role-based platform API supporting Doctor, Hospital/HR and Platform Admi
 | `shifts` | `shift_requirements`, `shift_requests`, `shift_status_history` |
 | `messaging` | `conversations`, `conversation_participants`, `messages` |
 | `notifications` | `notifications`, `device_tokens`, `notification_preferences` |
-| `core` | `specializations`, `qualifications`, `councils`, `communities`, `community_members`, `audit_logs`, `reports`, `support_tickets`, `support_messages`, `matching_configs`, `plans`, `subscriptions`, `entitlements`, `invoices`, `payments` |
+| `core` | `specializations`, `qualifications`, `councils`, `communities`, `community_members`, `audit_logs`, `reports`, `report_evidence`, `support_tickets`, `support_messages`, `matching_configs`, `plans`, `subscriptions`, `entitlements`, `invoices`, `payments` |
 
 ### 7.3 State Machines
 
@@ -1365,13 +1376,13 @@ The following models were added to complete the Spec 02 entity list:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           CLIENT LAYER                                     │
+│                           CLIENT LAYER                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ┌─────────────────────┐     ┌─────────────────────┐                       │
+│  ┌─────────────────────┐     ┌─────────────────────┐                        │
 │  │  Doctor Mobile App   │     │  Hospital CRM       │                       │
 │  │  (Android Native)    │     │  (React Web)        │                       │
-│  └──────────┬──────────┘     └──────────┬──────────┘                       │
+│  └──────────┬──────────┘     └──────────┬──────────┘                        │
 │             │                            │                                  │
 │             └──────────┬─────────────────┘                                  │
 │                        │                                                    │
@@ -1379,49 +1390,49 @@ The following models were added to complete the Spec 02 entity list:
                          │ HTTPS / REST API
                          ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         API GATEWAY / NGINX                                │
-│                         (Load Balancer + SSL Termination)                  │
+│                         API GATEWAY / NGINX                                 │
+│                         (Load Balancer + SSL Termination)                   │
 └─────────────────────────────────────────────────────────────────────────────┘
                          │
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        APPLICATION LAYER                                   │
+│                        APPLICATION LAYER                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ┌──────────────────────────────────────────────────────────────────┐      │
-│  │                        FastAPI Layer                             │      │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │      │
-│  │  │ Auth     │ │ Doctors  │ │ Network  │ │  Jobs    │           │      │
-│  │  │ Router   │ │ Router   │ │ Router   │ │ Router   │           │      │
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │      │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │      │
-│  │  │ Avail-   │ │ Messages │ │ Notific- │ │ Admin    │           │      │
-│  │  │ ability  │ │ Router   │ │ ations   │ │ Router   │           │      │
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │      │
-│  └──────────────────────────────────────────────────────────────────┘      │
+│  ┌──────────────────────────────────────────────────────────────────┐       │
+│  │                        FastAPI Layer                             │       │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │       │
+│  │  │ Auth     │ │ Doctors  │ │ Network  │ │  Jobs    │             │       │
+│  │  │ Router   │ │ Router   │ │ Router   │ │ Router   │             │       │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘             │       │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │       │
+│  │  │ Avail-   │ │ Messages │ │ Notific- │ │ Admin    │             │       │
+│  │  │ ability  │ │ Router   │ │ ations   │ │ Router   │             │       │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘             │       │
+│  └──────────────────────────────────────────────────────────────────┘       │
 │                                    │                                        │
-│  ┌──────────────────────────────────────────────────────────────────┐      │
-│  │                      Django 5.0+ Core Layer                      │      │
-│  │                                                                  │      │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │      │
-│  │  │ Models   │ │ Admin    │ │ ORM      │ │ Celery  │           │      │
-│  │  │ Layer    │ │ Interface│ │ Queries  │ │ Tasks   │           │      │
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │      │
-│  └──────────────────────────────────────────────────────────────────┘      │
+│  ┌──────────────────────────────────────────────────────────────────┐       │
+│  │                      Django 5.0+ Core Layer                      │       │
+│  │                                                                  │       │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │       │
+│  │  │ Models   │ │ Admin    │ │ ORM      │ │ Celery  │              │       │
+│  │  │ Layer    │ │ Interface│ │ Queries  │ │ Tasks   │              │       │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘             │       │
+│  └──────────────────────────────────────────────────────────────────┘       │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                          │
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                       DATA & CACHE LAYER                                   │
+│                       DATA & CACHE LAYER                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────┐    │
-│  │   PostgreSQL    │    │    Redis        │    │   Celery + Redis    │    │
-│  │   16+           │    │   7.2+          │    │   (Background Tasks)│    │
-│  └─────────────────┘    └─────────────────┘    └─────────────────────┘    │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────┐      │
+│  │   PostgreSQL    │    │    Redis        │    │   Celery + Redis    │      │
+│  │   16+           │    │   7.2+          │    │   (Background Tasks)│      │
+│  └─────────────────┘    └─────────────────┘    └─────────────────────┘      │
 │                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────┐       │
-│  │                     AWS S3 (File Storage)                       │       │
-│  └─────────────────────────────────────────────────────────────────┘       │
+│  ┌─────────────────────────────────────────────────────────────────┐        │
+│  │                     AWS S3 (File Storage)                       │        │
+│  └─────────────────────────────────────────────────────────────────┘        │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1430,32 +1441,32 @@ The following models were added to complete the Spec 02 entity list:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         DATA FLOW DIAGRAM                                  │
+│                         DATA FLOW DIAGRAM                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  DOCTOR REGISTRATION FLOW:                                                 │
-│  ┌─────────┐   ┌─────────┐   ┌──────────┐   ┌──────────┐   ┌───────────┐ │
-│  │ Mobile  │──▶│ OTP     │──▶│ Profile  │──▶│ NMC      │──▶│ Verified  │ │
-│  │ Number  │   │ Verify  │   │ Create   │   │ Verify   │   │ Profile   │ │
-│  └─────────┘   └─────────┘   └──────────┘   └──────────┘   └───────────┘ │
+│  DOCTOR REGISTRATION FLOW:                                                  │
+│  ┌─────────┐   ┌─────────┐   ┌──────────┐   ┌──────────┐   ┌───────────┐    │
+│  │ Mobile  │──▶│ OTP     │──▶│ Profile  │──▶│ NMC      │──▶│ Verified  │  │
+│  │ Number  │   │ Verify  │   │ Create   │   │ Verify   │   │ Profile   │    │
+│  └─────────┘   └─────────┘   └──────────┘   └──────────┘   └───────────┘    │
 │                                                                             │
-│  JOB APPLICATION FLOW:                                                     │
-│  ┌─────────┐   ┌─────────┐   ┌──────────┐   ┌──────────┐   ┌───────────┐ │
-│  │ Browse  │──▶│ Apply   │──▶│ Shortlist│──▶│ Interview│──▶│ Hired/    │ │
-│  │ Jobs    │   │ One-Tap │   │          │   │          │   │ Rejected  │ │
-│  └─────────┘   └─────────┘   └──────────┘   └──────────┘   └───────────┘ │
+│  JOB APPLICATION FLOW:                                                      │
+│  ┌─────────┐   ┌─────────┐   ┌──────────┐   ┌──────────┐   ┌───────────┐    │
+│  │ Browse  │──▶│ Apply   │──▶│ Shortlist│──▶│ Interview│──▶│ Hired/    │  │
+│  │ Jobs    │   │ One-Tap │   │          │   │          │   │ Rejected  │    │
+│  └─────────┘   └─────────┘   └──────────┘   └──────────┘   └───────────┘    │
 │                                                                             │
-│  SHIFT REQUEST FLOW:                                                       │
-│  ┌─────────┐   ┌─────────┐   ┌──────────┐   ┌──────────┐   ┌───────────┐ │
-│  │ Create  │──▶│ Match   │──▶│ Send     │──▶│ Accept/  │──▶│ Confirm/  │ │
-│  │ Request │   │ Doctors │   │ Request  │   │ Decline  │   │ Complete  │ │
-│  └─────────┘   └─────────┘   └──────────┘   └──────────┘   └───────────┘ │
+│  SHIFT REQUEST FLOW:                                                        │
+│  ┌─────────┐   ┌─────────┐   ┌──────────┐   ┌──────────┐   ┌───────────┐    │
+│  │ Create  │──▶│ Match   │──▶│ Send     │──▶│ Accept/  │──▶│ Confirm/  │  │
+│  │ Request │   │ Doctors │   │ Request  │   │ Decline  │   │ Complete  │    │
+│  └─────────┘   └─────────┘   └──────────┘   └──────────┘   └───────────┘    │
 │                                                                             │
-│  HOSPITAL REGISTRATION FLOW:                                               │
-│  ┌─────────┐   ┌─────────┐   ┌──────────┐   ┌──────────┐   ┌───────────┐ │
-│  │ Admin   │──▶│ OTP     │──▶│ Hospital │──▶│ Document │──▶│ Verified  │ │
-│  │ Phone   │   │ Verify  │   │ Details  │   │ Upload   │   │ Hospital  │ │
-│  └─────────┘   └─────────┘   └──────────┘   └──────────┘   └───────────┘ │
+│  HOSPITAL REGISTRATION FLOW:                                                │
+│  ┌─────────┐   ┌─────────┐   ┌──────────┐   ┌──────────┐   ┌───────────┐    │
+│  │ Admin   │──▶│ OTP     │──▶│ Hospital │──▶│ Document │──▶│ Verified  │  │
+│  │ Phone   │   │ Verify  │   │ Details  │   │ Upload   │   │ Hospital  │    │
+│  └─────────┘   └─────────┘   └──────────┘   └──────────┘   └───────────┘    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1530,6 +1541,7 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE,
     user_type VARCHAR(20) NOT NULL CHECK (user_type IN ('DOCTOR', 'HOSPITAL_ADMIN', 'HOSPITAL_HR', 'ADMIN')),
     status VARCHAR(20) DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'DELETED')),
+    is_super_admin BOOLEAN DEFAULT FALSE,  -- explicit Super Admin flag (separate from is_superuser)
     is_staff BOOLEAN DEFAULT FALSE,
     is_superuser BOOLEAN DEFAULT FALSE,
     last_login TIMESTAMP WITH TIME ZONE,
@@ -3693,6 +3705,20 @@ docker-compose logs -f
 - [x] **Spec 02 — Privacy enforcement rules documented and enforced at query/serialization layer**
 - [x] **Spec 02 — Security & infrastructure checklist documented**
 - [x] **Spec 02 — API contract standard (method, auth role, schema, errors, pagination, side effects, audit event)**
+- [x] **Gap Audit — `is_super_admin` field on `User` model (explicit Platform Admin vs Super Admin distinction)**
+- [x] **Gap Audit — `require_super_admin()` dependency in `dependencies.py` (separate from `require_admin()`)**
+- [x] **Gap Audit — Super Admin endpoints: create/deactivate/update-permissions for admin users (`/api/v1/admin/super/admin-users/`)**
+- [x] **Gap Audit — Matching config create + activate restricted to Super Admin only**
+- [x] **Gap Audit — Super Admin self-deactivation blocked (400)**
+- [x] **Gap Audit — Platform Admin cannot touch Super Admin accounts (403)**
+- [x] **Gap Audit — `permissions` JSONField on `HospitalUser` for custom per-user permission overrides**
+- [x] **Gap Audit — `ReportEvidence` model (`report_evidence` table) with private S3 file reference**
+- [x] **Gap Audit — `create_admin.py` production credential guard (blocks default phone/password in `DJANGO_ENV=production`)**
+- [x] **Gap Audit — `create_admin.py` `--super` flag to set `is_super_admin=True`**
+- [x] **Gap Audit — Security/RBAC test suite (`tests/test_security_rbac.py`) covering 13 audit scenarios**
+- [x] **Gap Audit — Community moderators deferred to Phase 2 (documented below)**
+- [x] **Gap Audit — Geospatial: JSONB coordinates used for V1; PostGIS `PointField` deferred to Phase 2**
+- [x] **Gap Audit — Base64 fields (`photo_base64`, `cover_base64`, `logo_base64`) marked deprecated; production path is `file_id` + S3**
 - [ ] Specialty communities & group discussions
 - [ ] Hospital verification via document OCR
 - [ ] CME credit tracking
@@ -3709,9 +3735,148 @@ docker-compose logs -f
 
 ---
 
-## 21. Contributing
+## 21. Gap Audit Final Report (Doc-Connect Backend Gap Audit)
 
-### 21.1 Development Guidelines
+> Audit completed against the **DOC-CONNECT — FINAL BACKEND GAP AUDIT & FIX REQUIREMENTS** specification.
+
+### A. Already Implemented Correctly
+
+| Item | Evidence |
+|------|----------|
+| Doctor verification workflow (UNVERIFIED→PENDING→VERIFIED→REJECTED→RESUBMISSION) | `DoctorProfile.verification_status` + admin endpoints |
+| Hospital verification workflow | `Hospital.verification_status` + admin endpoints |
+| `HospitalUser` model with `user`, `role`, `hospital_id`, `branch_id`, `department_id`, `permissions`, `status` | `apps/hospitals/models.py` + migration `0005` |
+| Branch User architecture via `HospitalUser.role + branch_id` (no duplicate `user_type`) | Documented in Section 3.0 |
+| Hospital scope isolation — `/me/` endpoints resolve hospital from authenticated user's `HospitalUser` | `fastapi_app/routers/hospitals.py` — `_get_active_admin_hu` / `_get_active_hu` |
+| Inactive `HospitalUser` blocked — `status='ACTIVE'` enforced on every hospital endpoint | `_get_active_admin_hu` / `_get_active_hu` helpers |
+| `Report` model with severity, reason codes, lifecycle, reviewer, resolution | `apps/core/models.py` |
+| `ReportEvidence` model — private S3 file reference, never public | `apps/core/models.py` + migration `core/0005` |
+| `AuditLog` model — immutable, written on every privileged action | `apps/core/models.py` + `admin.py` |
+| JWT rotation + `RefreshSession` revocation | `apps/accounts/models.py` + `auth.py` router |
+| Suspended/deleted user blocked at `get_current_user` | `fastapi_app/dependencies.py` |
+| `MatchingConfig` — versioned weights, never hardcoded | `apps/core/models.py` |
+| Billing models (`Plan`, `Subscription`, `Entitlement`, `Invoice`, `Payment`) | `apps/core/models.py` |
+| `is_super_admin` field on `User` | `apps/accounts/models.py` + migration `accounts/0002` |
+| `require_admin()` / `require_super_admin()` in `dependencies.py` | `fastapi_app/dependencies.py` |
+| Super Admin endpoints (`/super/admin-users/`) | `fastapi_app/routers/admin.py` |
+| Super Admin self-deactivation blocked (400) | `deactivate_admin_user` endpoint |
+| Platform Admin cannot suspend/restrict/deactivate Super Admin (403) | `_update_user_status_with_audit` guard |
+| `dismiss_report` / `escalate_report` FK assignment via `.save()` (not `.update()`) | `fastapi_app/routers/admin.py` |
+| `create_admin.py` production credential guard | `scripts/create_admin.py` — `DJANGO_ENV=production` block |
+| Billing 403 for non-HOSPITAL_ADMIN | `fastapi_app/routers/billing.py` |
+| Hospital A cannot access Hospital B jobs/staff | `jobs.py` — `job__hospital=hu.hospital` scope check |
+| `photo_base64`, `cover_base64`, `logo_base64` marked deprecated | `apps/doctors/models.py`, `apps/hospitals/models.py` |
+| Community moderators deferred to Phase 2 with explicit code comment | `fastapi_app/routers/admin.py` |
+
+### B. Partially Implemented → Completed
+
+| Item | Gap Found | Fix Applied |
+|------|-----------|-------------|
+| `dismiss_report` / `escalate_report` | Used `.update()` with FK object — silently fails in Django | Changed to `.get()` + `.save()` with explicit field list |
+| Platform Admin → Super Admin protection | `_update_user_status_with_audit` had no Super Admin guard | Added `if target.is_super_admin and not performed_by.is_super_admin: raise 403` |
+| Community moderators documentation | README claimed "manage moderators" as live | Added Phase 2 note in admin.py and README |
+| Base64 fields | No deprecation notice in models | Added `# DEPRECATED:` comments on all three base64 fields |
+
+### C. Missing → Implemented
+
+| Item | Implementation |
+|------|----------------|
+| RBAC tests: Platform Admin cannot suspend/restrict/deactivate Super Admin | `tests/test_security_rbac.py` — tests 19, 20 |
+| RBAC test: Platform Admin cannot modify Super Admin permissions | `tests/test_security_rbac.py` — test 20 |
+| RBAC test: Super Admin can suspend regular user | `tests/test_security_rbac.py` — test 21 |
+
+### D. Intentionally Deferred (Phase 2)
+
+| Item | Reason | Where Documented |
+|------|--------|------------------|
+| Community moderator add/remove APIs | No approved spec for moderator workflow; `CommunityMember` has no `role` field | `admin.py` comment + README Section 2.4 |
+| PostGIS `PointField` for radius/geospatial queries | V1 uses JSONB coordinates; PostGIS requires `django.contrib.gis` + DB extension + data migration | README Section 10.4 + roadmap |
+| Super Admin MFA/2FA | TOTP/SMS 2FA provider not yet selected | README Section 7.7 |
+| Sensitive data export approval workflow | Product decision required on format and approval chain | Deferred |
+
+### E. Database Migrations Created
+
+| Migration | App | Change |
+|-----------|-----|--------|
+| `accounts/0002_add_is_super_admin.py` | `accounts` | `is_super_admin BooleanField(default=False)` on `users` |
+| `hospitals/0005_add_hospitaluser_permissions.py` | `hospitals` | `permissions JSONField(default=dict)` on `hospital_users` |
+| `core/0005_add_report_evidence.py` | `core` | New `report_evidence` table |
+
+> No new migrations required for this audit pass — all model changes were already migrated.
+
+### F. APIs Added / Changed
+
+| Method | Endpoint | Change |
+|--------|----------|--------|
+| POST | `/api/v1/admin/super/admin-users/` | Added — Super Admin creates Platform/Super Admin user |
+| POST | `/api/v1/admin/super/admin-users/{id}/deactivate/` | Added — Super Admin deactivates admin user |
+| PATCH | `/api/v1/admin/super/admin-users/{id}/permissions/` | Added — Super Admin updates `is_super_admin` flag |
+| POST | `/api/v1/admin/matching-configs/` | Changed — requires Super Admin (not Platform Admin) |
+| POST | `/api/v1/admin/matching-configs/{id}/activate/` | Changed — requires Super Admin (not Platform Admin) |
+| GET | `/api/v1/billing/plans/` | Changed — requires `HOSPITAL_ADMIN` or `ADMIN`; HR/Doctor = 403 |
+
+### G. Permission Changes
+
+| Endpoint Group | Before | After |
+|----------------|--------|-------|
+| All admin endpoints | `user_type == 'ADMIN'` | `require_admin()` — Platform Admin or Super Admin |
+| Matching config create/activate | Any admin | `require_super_admin()` — Super Admin only |
+| Admin user management (`/super/`) | Not implemented | `require_super_admin()` — Super Admin only |
+| Super Admin self-deactivation | Not guarded | Returns 400 |
+| Platform Admin acting on Super Admin | Not guarded | Returns 403 |
+
+### H. Security Tests Added
+
+File: `tests/test_security_rbac.py` — 21 test cases total
+
+| Test | Scenario |
+|------|----------|
+| `test_doctor_cannot_access_admin_dashboard` | Doctor → Admin API = 403 |
+| `test_doctor_cannot_access_admin_users` | Doctor → Admin users list = 403 |
+| `test_suspended_user_blocked` | Suspended user → protected API = 403 |
+| `test_invalid_token_rejected` | Invalid token → 401 |
+| `test_no_token_rejected` | No token → 403 |
+| `test_platform_admin_cannot_create_admin_user` | Platform Admin → `/super/` = 403 |
+| `test_platform_admin_cannot_activate_matching_config` | Platform Admin → matching config activate = 403 |
+| `test_platform_admin_cannot_deactivate_admin_user` | Platform Admin → deactivate admin = 403 |
+| `test_super_admin_can_access_dashboard` | Super Admin → dashboard = 200 |
+| `test_super_admin_cannot_deactivate_own_account` | Super Admin self-deactivate = 400 |
+| `test_hospital_a_cannot_access_hospital_b_staff` | Hospital A → Hospital B staff = not in results |
+| `test_branch_user_identified_via_hospital_user` | Branch User = `HospitalUser.role + branch_id` |
+| `test_hr_cannot_access_billing` | HR → billing = 403 |
+| `test_revoked_refresh_token_rejected` | Revoked refresh → 401 |
+| `test_report_evidence_model_exists` | `ReportEvidence` model + DB table exists |
+| `test_user_has_is_super_admin_field` | `User.is_super_admin` field exists |
+| `test_hospital_user_has_permissions_field` | `HospitalUser.permissions` field exists |
+| `test_unauthenticated_doctor_search_blocked` | No token → search = 403 |
+| `test_hr_cannot_access_billing_plans` | HR → `/billing/plans/` = 403 |
+| `test_doctor_cannot_access_billing_plans` | Doctor → `/billing/plans/` = 403 |
+| `test_hospital_a_cannot_access_hospital_b_jobs` | Hospital A → Hospital B job close = 403/404 |
+| `test_inactive_hospital_user_cannot_manage_staff` | Inactive `HospitalUser` → staff management = 403 |
+| `test_report_evidence_not_publicly_accessible` | Private evidence file → requires auth |
+| `test_doctor_cannot_access_another_doctors_private_profile` | Doctor A → Doctor B private profile = 404/403 |
+| `test_platform_admin_cannot_suspend_super_admin` | Platform Admin → suspend Super Admin = 403 |
+| `test_platform_admin_cannot_restrict_super_admin` | Platform Admin → restrict Super Admin = 403 |
+| `test_platform_admin_cannot_deactivate_super_admin` | Platform Admin → deactivate Super Admin = 403 |
+| `test_platform_admin_cannot_modify_super_admin_permissions` | Platform Admin → modify Super Admin permissions = 403 |
+| `test_super_admin_can_suspend_regular_user` | Super Admin → suspend regular user = 200 |
+
+### I. Remaining Product Decisions
+
+| Decision | Owner | Notes |
+|----------|-------|-------|
+| Community moderator workflow | Product | Define moderator role, permissions, add/remove flow before Phase 2 |
+| PostGIS migration strategy | Engineering | Decide on `django.contrib.gis` adoption; requires DB extension + data migration for existing JSONB coordinates |
+| Super Admin MFA/2FA provider | Engineering/Security | Select TOTP library (e.g. `pyotp`) or SMS 2FA; required before production Super Admin accounts |
+| Custom `HospitalUser.permissions` schema | Product | Define allowed permission keys and values before enabling custom permission overrides |
+| Sensitive data export approval chain | Product/Legal | Define who approves exports, what data is exportable, audit requirements |
+| Base64 field deprecation timeline | Engineering | Set a migration deadline for clients still using `photo_base64`/`cover_base64`/`logo_base64` |
+
+---
+
+## 22. Contributing
+
+### 22.1 Development Guidelines
 
 1. **Code Style**
    - Python: Black, isort, flake8
@@ -3731,7 +3896,7 @@ docker-compose logs -f
    - `test:` Tests
    - `refactor:` Code refactor
 
-### 21.2 Pull Request Process
+### 22.2 Pull Request Process
 
 1. Fork the repository
 2. Create feature branch
@@ -3759,4 +3924,4 @@ This project is proprietary and confidential. Unauthorized copying, distribution
 
 ---
 
-*Last updated: September 2026 | Version 2.2 | Maintained by Pavan Kumar Dubey*
+*Last updated: September 2026 | Version 2.3 | Maintained by Pavan Kumar Dubey*

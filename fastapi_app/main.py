@@ -1,8 +1,15 @@
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'docconnect_backend.settings.development')
-django.setup()
+# Respect whatever DJANGO_SETTINGS_MODULE was set before import (e.g. test settings).
+# Only fall back to development if nothing is set.
+if not os.environ.get('DJANGO_SETTINGS_MODULE'):
+    os.environ['DJANGO_SETTINGS_MODULE'] = 'docconnect_backend.settings.development'
+
+# Only call setup() if Django hasn't been configured yet (avoids double-setup in tests).
+from django.apps import apps as _django_apps
+if not _django_apps.ready:
+    django.setup()
 
 from datetime import datetime
 from fastapi import FastAPI

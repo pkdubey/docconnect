@@ -29,6 +29,9 @@ class DoctorProfile(models.Model):
     first_name = models.CharField(max_length=80)
     last_name = models.CharField(max_length=80)
     photo_file_id = models.UUIDField(null=True, blank=True)
+    # DEPRECATED: photo_base64 and cover_base64 are legacy dev-only fields.
+    # Production path uses photo_file_id with private S3 storage.
+    # Do not write new data to these fields. Will be removed in a future migration.
     photo_base64 = models.TextField(null=True, blank=True)
     cover_base64 = models.TextField(null=True, blank=True)
     headline = models.CharField(max_length=160, null=True, blank=True)
@@ -181,6 +184,9 @@ class Post(models.Model):
     posted_by = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='posts', null=True, blank=True)
     post_type = models.CharField(max_length=20, choices=POST_TYPES, default='UPDATE')
     content = models.TextField()
+    # DEPRECATED: image_base64 is a legacy dev-only field.
+    # Production path uses file_id references with private S3 storage.
+    # Do not write new data to this field. Will be removed in a future migration.
     image_base64 = models.TextField(null=True, blank=True)
     is_anonymous = models.BooleanField(default=False)  # for case discussions
     patient_privacy_confirmed = models.BooleanField(default=False)  # CASE posts must confirm
