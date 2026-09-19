@@ -1,5 +1,13 @@
 import uuid
+from django.conf import settings
 from django.db import models
+
+
+def _build_location_point_field():
+    if getattr(settings, 'USE_POSTGIS', False):
+        from django.contrib.gis.db.models import PointField
+        return PointField(null=True, blank=True, srid=4326, geography=True)
+    return models.JSONField(null=True, blank=True)
 
 
 class Hospital(models.Model):
@@ -26,6 +34,9 @@ class Hospital(models.Model):
     logo_base64 = models.TextField(null=True, blank=True)
     about = models.TextField(null=True, blank=True)
     location = models.JSONField()
+    # PostGIS PointField — active when USE_POSTGIS=true in settings.
+    # Falls back to JSONField (null) when GIS is not enabled; Haversine/JSONB search is used instead.
+    location_point = _build_location_point_field()
     bed_count = models.IntegerField(null=True, blank=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
     email = models.EmailField(null=True, blank=True)

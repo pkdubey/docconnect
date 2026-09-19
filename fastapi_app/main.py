@@ -20,7 +20,8 @@ from a2wsgi import WSGIMiddleware
 from fastapi_app.routers import (
     auth, doctors, hospitals, jobs, availability, shifts,
     messaging, notifications, feed, network, search, communities, admin, devices,
-    files, masters, support, billing
+    files, masters, support, billing, mfa,
+    cme, endorsements, second_opinions, analytics, telemedicine
 )
 from fastapi_app.middleware.logging import LoggingMiddleware
 from fastapi import APIRouter as _APIRouter, Depends as _Depends
@@ -107,6 +108,12 @@ app.include_router(files.router)
 app.include_router(masters.router)
 app.include_router(support.router)
 app.include_router(billing.router)
+app.include_router(mfa.router)
+app.include_router(cme.router)
+app.include_router(endorsements.router)
+app.include_router(second_opinions.router)
+app.include_router(analytics.router)
+app.include_router(telemedicine.router)
 
 
 @app.get("/health")

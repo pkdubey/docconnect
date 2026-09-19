@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 
 from asgiref.sync import sync_to_async
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from enum import Enum
 
@@ -431,6 +431,85 @@ async def get_hospital_verification(current_user=Depends(get_current_user)):
         raise
     return {"verification_status": h.verification_status,
             "verified_at": h.verified_at.isoformat() if h.verified_at else None}
+
+
+# ── Candidate Discovery ──────────────────────────────────────
+
+@router.get("/me/candidates/", summary="Search & filter doctors (candidate discovery)")
+async def search_candidates(
+    specialty: Optional[str] = Query(None),
+    qualification: Optional[str] = Query(None),
+    experience_min: Optional[float] = Query(None),
+    city: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    verified_only: bool = Query(True),
+    available_now: bool = Query(False),
+    locum_available: bool = Query(False),
+    visiting_available: bool = Query(False),
+    search: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user=Depends(get_current_user),
+):
+    def _get_hu():
+        return _get_active_hu(current_user)
+
+    try:
+        await sync_to_async(_get_hu, thread_sensitive=True)()
+    except HTTPException:
+        raise
+
+    def _search():
+        from apps.doctors.models import DoctorProfile
+        from apps.availability.models import DoctorAvailability
+        from django.db.models import Q
+        from django.utils import timezone
+
+        qs = DoctorProfile.objects.all()
+        if verified_only:
+            qs = qs.filter(verification_status='VERIFIED')
+        if specialty:
+            qs = qs.filter(primary_specialization_id=specialty)
+        if experience_min is not None:
+            qs = qs.filter(experience_years__gte=experience_min)
+        if city:
+            qs = qs.filter(professional_location__city__icontains=city)
+        if state:
+            qs = qs.filter(professional_location__state__icontains=state)
+        if search:
+            qs = qs.filter(
+                Q(first_name__icontains=search) | Q(last_name__icontains=search) |
+                Q(headline__icontains=search)
+            )
+        if available_now or locum_available or visiting_available:
+            today = timezone.now().date()
+            avail_qs = DoctorAvailability.objects.filter(
+                is_active=True,
+                available_from__lte=today,
+                available_until__gte=today,
+            )
+            if locum_available:
+                avail_qs = avail_qs.filter(availability_type='LOCUM')
+            elif visiting_available:
+                avail_qs = avail_qs.filter(availability_type='VISITING')
+            doctor_ids = avail_qs.values_list('doctor_id', flat=True)
+            qs = qs.filter(id__in=doctor_ids)
+        total = qs.count()
+        results = list(qs.order_by('-experience_years')[(page - 1) * page_size: page * page_size])
+        return total, results
+
+    total, results = await sync_to_async(_search, thread_sensitive=True)()
+    return {
+        "total": total, "page": page,
+        "results": [{
+            "id": str(d.id), "full_name": d.full_name, "headline": d.headline,
+            "experience_years": float(d.experience_years),
+            "verification_status": d.verification_status,
+            "open_to_opportunities": d.open_to_opportunities,
+            "location": d.professional_location or {},
+            "primary_specialization_id": str(d.primary_specialization_id) if d.primary_specialization_id else None,
+        } for d in results]
+    }
 
 
 @router.get("/{hospital_id}/", response_model=HospitalOut, summary="View public hospital profile")

@@ -255,6 +255,33 @@ async def hospital_verification_queue(
     return {"total": total, "page": page, "results": results}
 
 
+@router.get("/hospitals/verification-cases/{case_id}/")
+async def hospital_verification_case_detail(case_id: str, current_user=Depends(get_current_user)):
+    require_admin(current_user)
+
+    def _get():
+        from apps.hospitals.models import Hospital
+        try:
+            h = Hospital.objects.prefetch_related('branches', 'departments').get(id=case_id)
+        except Hospital.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Hospital not found")
+        return h
+
+    try:
+        h = await sync_to_async(_get, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {
+        "id": str(h.id), "name": h.name, "type": h.type,
+        "about": h.about, "location": h.location or {},
+        "bed_count": h.bed_count, "phone": h.phone, "email": h.email,
+        "verification_status": h.verification_status,
+        "created_at": h.created_at.isoformat(),
+        "branches": [{"id": str(b.id), "name": b.name} for b in h.branches.all()],
+        "departments": [{"id": str(d.id), "name": d.name} for d in h.departments.all()],
+    }
+
+
 @router.post("/hospitals/verification-cases/{case_id}/approve/", response_model=SuccessOut)
 async def approve_hospital_verification(case_id: str, current_user=Depends(get_current_user)):
     require_admin(current_user)
@@ -299,6 +326,26 @@ async def reject_hospital_verification(
     return SuccessOut(success=True, message="Hospital verification rejected")
 
 
+@router.post("/hospitals/verification-cases/{case_id}/resubmit/", response_model=SuccessOut)
+async def allow_hospital_resubmit(case_id: str, current_user=Depends(get_current_user)):
+    require_admin(current_user)
+
+    def _resubmit():
+        from apps.hospitals.models import Hospital
+        updated = Hospital.objects.filter(id=case_id, verification_status='REJECTED').update(
+            verification_status='UNVERIFIED'
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Hospital not found or not in REJECTED state")
+        _write_audit(current_user, 'HOSPITAL_RESUBMISSION_ALLOWED', 'Hospital', case_id)
+
+    try:
+        await sync_to_async(_resubmit, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return SuccessOut(success=True, message="Hospital can now resubmit verification")
+
+
 # ── User Management ───────────────────────────────────────────
 
 @router.get("/users/")
@@ -332,6 +379,50 @@ async def list_all_users(
         "total": total, "page": page,
         "results": [{"id": str(u.id), "phone": u.phone, "user_type": u.user_type,
                      "status": u.status, "created_at": u.created_at.isoformat()} for u in results]
+    }
+
+
+@router.get("/users/{user_id}/")
+async def get_user_detail(user_id: str, current_user=Depends(get_current_user)):
+    require_admin(current_user)
+
+    def _get():
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            u = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            raise HTTPException(status_code=404, detail="User not found")
+        extra = {}
+        if u.user_type == 'DOCTOR':
+            try:
+                dp = u.doctor_profile
+                extra = {
+                    "full_name": dp.full_name,
+                    "verification_status": dp.verification_status,
+                    "headline": dp.headline,
+                }
+            except Exception:
+                pass
+        elif u.user_type in ('HOSPITAL_ADMIN', 'HOSPITAL_HR'):
+            try:
+                from apps.hospitals.models import HospitalUser
+                hu = HospitalUser.objects.select_related('hospital').get(user=u)
+                extra = {"hospital_name": hu.hospital.name, "role": hu.role}
+            except Exception:
+                pass
+        return u, extra
+
+    try:
+        u, extra = await sync_to_async(_get, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {
+        "id": str(u.id), "phone": u.phone, "email": u.email,
+        "user_type": u.user_type, "status": u.status,
+        "is_super_admin": u.is_super_admin,
+        "created_at": u.created_at.isoformat(),
+        **extra,
     }
 
 
@@ -441,7 +532,7 @@ async def get_report_detail(report_id: str, current_user=Depends(get_current_use
     def _get():
         from apps.core.models import Report
         try:
-            return Report.objects.select_related('reporter', 'reviewed_by').get(id=report_id)
+            return Report.objects.select_related('reporter', 'reviewed_by').prefetch_related('evidence').get(id=report_id)
         except Report.DoesNotExist:
             raise HTTPException(status_code=404, detail="Report not found")
 
@@ -456,6 +547,8 @@ async def get_report_detail(report_id: str, current_user=Depends(get_current_use
         "resolution_notes": r.resolution_notes,
         "resolved_at": r.resolved_at.isoformat() if r.resolved_at else None,
         "created_at": r.created_at.isoformat(),
+        "evidence": [{"id": str(e.id), "evidence_type": e.evidence_type,
+                      "file_id": str(e.evidence_file_id)} for e in r.evidence.all()],
     }
 
 
@@ -586,11 +679,12 @@ async def moderate_job(job_id: str, body: ModerationBody, current_user=Depends(g
 
 
 # ── Community Management ──────────────────────────────────────
-# NOTE: Community moderator management (add/remove moderators) is Phase 2.
-# The CommunityMember model does not yet have a role/is_moderator field.
-# Endpoints: POST /admin/communities/{id}/moderators/ and
-#            DELETE /admin/communities/{id}/moderators/{user_id}/
-# will be implemented in Phase 2 when the CommunityMember model is extended.
+# Phase 2: Community moderator add/remove APIs implemented.
+# CommunityMember.is_moderator field added via migration core/0007.
+
+class ModeratorAdd(BaseModel):
+    user_id: str
+
 
 @router.post("/communities/", status_code=201)
 async def create_community(body: CommunityCreate, current_user=Depends(get_current_user)):
@@ -652,6 +746,84 @@ async def archive_community(community_id: str, current_user=Depends(get_current_
     except HTTPException:
         raise
     return SuccessOut(success=True, message="Community archived")
+
+
+@router.post("/communities/{community_id}/moderators/", status_code=201, response_model=SuccessOut,
+             summary="Add a community moderator")
+async def add_community_moderator(
+    community_id: str, body: ModeratorAdd, current_user=Depends(get_current_user)
+):
+    require_admin(current_user)
+
+    def _add():
+        from apps.core.models import Community, CommunityMember
+        try:
+            community = Community.objects.get(id=community_id, is_active=True)
+        except Community.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Community not found")
+        member, created = CommunityMember.objects.get_or_create(
+            community=community, user_id=body.user_id,
+            defaults={'is_moderator': True},
+        )
+        if not created and not member.is_moderator:
+            member.is_moderator = True
+            member.save(update_fields=['is_moderator'])
+        elif not created and member.is_moderator:
+            raise HTTPException(status_code=409, detail="User is already a moderator")
+        _write_audit(current_user, 'COMMUNITY_MODERATOR_ADDED', 'Community', community_id,
+                     {"user_id": body.user_id})
+
+    try:
+        await sync_to_async(_add, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return SuccessOut(success=True, message="Moderator added")
+
+
+@router.delete("/communities/{community_id}/moderators/{user_id}/", response_model=SuccessOut,
+               summary="Remove a community moderator")
+async def remove_community_moderator(
+    community_id: str, user_id: str, current_user=Depends(get_current_user)
+):
+    require_admin(current_user)
+
+    def _remove():
+        from apps.core.models import CommunityMember
+        updated = CommunityMember.objects.filter(
+            community_id=community_id, user_id=user_id, is_moderator=True
+        ).update(is_moderator=False)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Moderator not found")
+        _write_audit(current_user, 'COMMUNITY_MODERATOR_REMOVED', 'Community', community_id,
+                     {"user_id": user_id})
+
+    try:
+        await sync_to_async(_remove, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return SuccessOut(success=True, message="Moderator removed")
+
+
+@router.get("/communities/{community_id}/moderators/", summary="List community moderators")
+async def list_community_moderators(community_id: str, current_user=Depends(get_current_user)):
+    require_admin(current_user)
+
+    def _list():
+        from apps.core.models import CommunityMember
+        return list(
+            CommunityMember.objects.filter(
+                community_id=community_id, is_moderator=True
+            ).select_related('user')
+        )
+
+    members = await sync_to_async(_list, thread_sensitive=True)()
+    return {
+        "community_id": community_id,
+        "moderators": [
+            {"user_id": str(m.user_id), "phone": m.user.phone, "joined_at": m.joined_at.isoformat()}
+            for m in members
+        ]
+    }
 
 
 # ── Audit Logs ────────────────────────────────────────────────
@@ -942,6 +1114,99 @@ async def activate_matching_config(config_id: str, current_user=Depends(get_curr
     except HTTPException:
         raise
     return SuccessOut(success=True, message="Matching config activated")
+
+
+# ── Hospital Verification via Document OCR ──────────────────
+# Phase 2: AWS Textract-based OCR for hospital registration documents.
+# Admin uploads a document file_id; system extracts text + fields for review.
+
+class OCRRequest(BaseModel):
+    file_id: str  # UUID of the document already uploaded to S3
+    s3_key: Optional[str] = None  # override S3 key if known; else auto-derived
+
+
+@router.post("/hospitals/verification-cases/{case_id}/ocr/",
+             summary="Run OCR on hospital verification document")
+async def ocr_hospital_document(
+    case_id: str,
+    body: OCRRequest,
+    current_user=Depends(get_current_user),
+):
+    """
+    Runs AWS Textract OCR on a hospital registration/license document.
+    Returns extracted text + structured fields (reg number, name, date, state).
+    Admin must review and confirm — OCR output is advisory only.
+    """
+    require_admin(current_user)
+
+    # Verify hospital case exists
+    def _check():
+        from apps.hospitals.models import Hospital
+        try:
+            return Hospital.objects.get(id=case_id)
+        except Hospital.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Hospital not found")
+
+    try:
+        hospital = await sync_to_async(_check, thread_sensitive=True)()
+    except HTTPException:
+        raise
+
+    from apps.core.services.ocr import ocr_extract_hospital_document
+    s3_key = body.s3_key or f"hospital-docs/{body.file_id}"
+    result = await ocr_extract_hospital_document(
+        file_id=body.file_id,
+        s3_key=s3_key,
+    )
+
+    # Write audit log
+    def _audit():
+        _write_audit(
+            current_user, 'HOSPITAL_OCR_RUN', 'Hospital', case_id,
+            {"file_id": body.file_id, "ocr_status": result.get("status")}
+        )
+    await sync_to_async(_audit, thread_sensitive=True)()
+
+    return {
+        "hospital_id": case_id,
+        "hospital_name": hospital.name,
+        **result,
+    }
+
+
+@router.post("/hospitals/verification-cases/{case_id}/ocr/confirm/",
+             response_model=SuccessOut,
+             summary="Confirm OCR-extracted fields and approve hospital verification")
+async def confirm_ocr_and_approve(
+    case_id: str,
+    body: VerificationActionBody,
+    current_user=Depends(get_current_user),
+):
+    """
+    After reviewing OCR output, admin confirms the extracted data is correct
+    and approves the hospital verification in one step.
+    Optional `reason` field can store OCR confirmation notes.
+    """
+    require_admin(current_user)
+    from django.utils import timezone
+
+    def _approve():
+        from apps.hospitals.models import Hospital
+        updated = Hospital.objects.filter(id=case_id).update(
+            verification_status='VERIFIED', verified_at=timezone.now()
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Hospital not found")
+        _write_audit(
+            current_user, 'HOSPITAL_OCR_CONFIRMED_AND_APPROVED', 'Hospital', case_id,
+            {"notes": body.reason}
+        )
+
+    try:
+        await sync_to_async(_approve, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return SuccessOut(success=True, message="Hospital verified via OCR confirmation")
 
 
 # ── Super Admin — Admin User Management ──────────────────────

@@ -23,11 +23,20 @@ pydantic-core==2.46.4
 # ── Database ─────────────────────────────────────────────────
 psycopg[binary]==3.3.4
 
+# ── PostGIS / GeoDjango (optional — set USE_POSTGIS=true in .env) ────────────
+# Requires GDAL + GEOS system libraries and PostgreSQL PostGIS extension.
+Django[gis]==5.0.6
+
 # ── Cache & Task Queue ───────────────────────────────────────
 redis==5.0.7
 celery==5.4.0
 django-celery-beat==2.6.0
 django-celery-results==2.5.1
+
+# ── WebSocket (Django Channels) ──────────────────────────────
+channels==4.1.0
+channels-redis==4.2.0
+daphne==4.1.2
 
 # ── AWS S3 ───────────────────────────────────────────────────
 boto3==1.34.144
@@ -38,6 +47,10 @@ PyJWT==2.8.0
 cryptography==42.0.8
 passlib[bcrypt]==1.7.4
 
+# ── MFA / TOTP (Super Admin 2FA) ─────────────────────────────
+pyotp==2.9.0
+qrcode[pil]==7.4.2
+
 # ── Rate Limiting ────────────────────────────────────────────
 slowapi==0.1.9
 
@@ -45,7 +58,7 @@ slowapi==0.1.9
 twilio==9.2.3
 requests==2.32.3
 
-# ── Push Notifications ───────────────────────────────────────
+# ── Push Notifications (FCM + APNs) ──────────────────────────
 firebase-admin==6.5.0
 
 # ── Monitoring ───────────────────────────────────────────────

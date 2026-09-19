@@ -33,6 +33,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_login = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     search_vector = SearchVectorField(null=True, blank=True)
+    # MFA / TOTP fields (Super Admin 2FA)
+    totp_secret = models.CharField(max_length=64, null=True, blank=True)
+    mfa_enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

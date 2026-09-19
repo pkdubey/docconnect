@@ -196,3 +196,131 @@ async def search_communities(
             meta={"member_count": c.member_count},
         ) for c in results]
     )
+
+
+# ── Geospatial radius search (JSONB-based, no PostGIS required) ──────────────
+# Uses Haversine formula in Python — works with existing JSONB coordinates field.
+# PostGIS PointField migration is deferred to Phase 3.
+
+import math
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return distance in km between two lat/lon points."""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+@router.get("/doctors/nearby/", response_model=SearchResponse, summary="Find doctors within radius (km)")
+async def search_doctors_nearby(
+    lat: float = Query(..., description="Latitude of search centre"),
+    lon: float = Query(..., description="Longitude of search centre"),
+    radius_km: float = Query(50.0, ge=1, le=500, description="Search radius in kilometres"),
+    specialty: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user=Depends(get_current_user),
+):
+    """
+    Returns verified doctors whose `professional_location.coordinates` falls within
+    `radius_km` of the given lat/lon. Uses Haversine distance (JSONB coordinates).
+    """
+    from apps.doctors.models import DoctorProfile
+
+    def _fetch():
+        qs = DoctorProfile.objects.filter(
+            verification_status='VERIFIED',
+            professional_location__has_key='coordinates',
+        )
+        if specialty:
+            qs = qs.filter(primary_specialization_id=specialty)
+        return list(qs)
+
+    all_doctors = await sync_to_async(_fetch, thread_sensitive=True)()
+
+    nearby = []
+    for d in all_doctors:
+        coords = (d.professional_location or {}).get('coordinates') or {}
+        try:
+            dlat = float(coords.get('lat') or coords.get('latitude') or 0)
+            dlon = float(coords.get('lon') or coords.get('lng') or coords.get('longitude') or 0)
+        except (TypeError, ValueError):
+            continue
+        if dlat == 0 and dlon == 0:
+            continue
+        dist = _haversine_km(lat, lon, dlat, dlon)
+        if dist <= radius_km:
+            nearby.append((dist, d))
+
+    nearby.sort(key=lambda x: x[0])
+    total = len(nearby)
+    page_slice = nearby[(page - 1) * page_size: page * page_size]
+
+    return SearchResponse(
+        total=total,
+        results=[SearchResultItem(
+            id=str(d.id), type="doctor",
+            title=f"Dr. {d.full_name}",
+            subtitle=d.headline,
+            meta={
+                "city": (d.professional_location or {}).get("city"),
+                "experience_years": float(d.experience_years),
+                "distance_km": round(dist, 1),
+            },
+        ) for dist, d in page_slice]
+    )
+
+
+@router.get("/hospitals/nearby/", response_model=SearchResponse, summary="Find hospitals within radius (km)")
+async def search_hospitals_nearby(
+    lat: float = Query(...),
+    lon: float = Query(...),
+    radius_km: float = Query(50.0, ge=1, le=500),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user=Depends(get_current_user),
+):
+    """Returns verified hospitals within radius_km of lat/lon using Haversine distance."""
+    from apps.hospitals.models import Hospital
+
+    def _fetch():
+        return list(Hospital.objects.filter(
+            verification_status='VERIFIED',
+            location__has_key='coordinates',
+        ))
+
+    all_hospitals = await sync_to_async(_fetch, thread_sensitive=True)()
+
+    nearby = []
+    for h in all_hospitals:
+        coords = (h.location or {}).get('coordinates') or {}
+        try:
+            hlat = float(coords.get('lat') or coords.get('latitude') or 0)
+            hlon = float(coords.get('lon') or coords.get('lng') or coords.get('longitude') or 0)
+        except (TypeError, ValueError):
+            continue
+        if hlat == 0 and hlon == 0:
+            continue
+        dist = _haversine_km(lat, lon, hlat, hlon)
+        if dist <= radius_km:
+            nearby.append((dist, h))
+
+    nearby.sort(key=lambda x: x[0])
+    total = len(nearby)
+    page_slice = nearby[(page - 1) * page_size: page * page_size]
+
+    return SearchResponse(
+        total=total,
+        results=[SearchResultItem(
+            id=str(h.id), type="hospital",
+            title=h.name, subtitle=h.type,
+            meta={
+                "city": (h.location or {}).get("city"),
+                "bed_count": h.bed_count,
+                "distance_km": round(dist, 1),
+            },
+        ) for dist, h in page_slice]
+    )

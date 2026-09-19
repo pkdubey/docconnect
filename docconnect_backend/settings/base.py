@@ -28,6 +28,7 @@ THIRD_PARTY_APPS = [
     'django_celery_beat',
     'django_celery_results',
     'storages',
+    'channels',
 ]
 
 LOCAL_APPS = [
@@ -166,8 +167,29 @@ SMS_API_KEY = env('SMS_API_KEY', default='')
 SMS_SENDER_ID = env('SMS_SENDER_ID', default='DOCCON')
 SMS_OTP_TEMPLATE_ID = env('SMS_OTP_TEMPLATE_ID', default='')
 
-# ── Firebase ─────────────────────────────────────────────────
+# ── Firebase / APNs ──────────────────────────────────────────
 FCM_SERVER_KEY = env('FCM_SERVER_KEY', default='')
+APNS_CERT_FILE = env('APNS_CERT_FILE', default='')   # path to .pem for APNs
+APNS_USE_SANDBOX = env.bool('APNS_USE_SANDBOX', default=True)
+
+# ── PostGIS (optional — set USE_POSTGIS=true in .env to enable PointField geospatial)
+# Requires: pip install django[gis] + PostgreSQL PostGIS extension
+# When disabled, Haversine/JSONB search is used (default).
+USE_POSTGIS = env.bool('USE_POSTGIS', default=False)
+if USE_POSTGIS:
+    DJANGO_APPS[DJANGO_APPS.index('django.contrib.postgres')] = 'django.contrib.gis'
+    DJANGO_APPS.append('django.contrib.postgres')
+    DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
+
+# ── Django Channels ──────────────────────────────────────────
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [env('REDIS_URL', default='redis://localhost:6379/1')],
+        },
+    },
+}
 
 # ── Sentry ───────────────────────────────────────────────────
 SENTRY_DSN = env('SENTRY_DSN', default='')

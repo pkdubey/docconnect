@@ -26,17 +26,18 @@ class Notification(models.Model):
 class DeviceToken(models.Model):
     """Push notification device tokens (FCM/APNs)."""
     PLATFORM_CHOICES = [
-        ('ANDROID', 'Android'),
-        ('IOS', 'iOS'),
+        ('FCM', 'FCM (Android/Firebase)'),
+        ('APNS', 'APNs (iOS)'),
         ('WEB', 'Web'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='device_tokens')
     token = models.TextField(unique=True)
-    platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES, default='ANDROID')
+    platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES, default='FCM')
     device_id = models.CharField(max_length=255, null=True, blank=True)
     device_name = models.CharField(max_length=255, null=True, blank=True)
+    bundle_id = models.CharField(max_length=255, null=True, blank=True)  # iOS APNs bundle ID
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

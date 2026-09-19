@@ -420,72 +420,74 @@ class AffiliationOut(BaseModel):
 
 @router.post("/profile/me/affiliations/", response_model=AffiliationOut, status_code=201, summary="Add hospital affiliation")
 async def add_affiliation(aff: AffiliationCreate, current_doctor=Depends(get_current_doctor)):
-    import uuid
-    from django.utils import timezone
+    from apps.doctors.models import DoctorAffiliation
 
     def _create():
-        affiliations = current_doctor.metadata.get('affiliations', [])
-        new_aff = {
-            "id": str(uuid.uuid4()),
-            "hospital_name": aff.hospital_name,
-            "role": aff.role,
-            "start_date": str(aff.start_date),
-            "end_date": str(aff.end_date) if aff.end_date else None,
-            "is_current": aff.is_current,
-        }
-        affiliations.append(new_aff)
-        current_doctor.metadata['affiliations'] = affiliations
-        current_doctor.save(update_fields=['metadata'])
-        return new_aff
+        a = DoctorAffiliation.objects.create(
+            doctor=current_doctor,
+            hospital_name=aff.hospital_name,
+            role=aff.role,
+            start_date=aff.start_date,
+            end_date=aff.end_date,
+            is_current=aff.is_current,
+        )
+        return a
 
-    aff_data = await sync_to_async(_create, thread_sensitive=True)()
-    return AffiliationOut(**aff_data)
+    a = await sync_to_async(_create, thread_sensitive=True)()
+    return AffiliationOut(id=str(a.id), hospital_name=a.hospital_name, role=a.role,
+                          start_date=str(a.start_date), end_date=str(a.end_date) if a.end_date else None,
+                          is_current=a.is_current)
 
 
 @router.get("/profile/me/affiliations/", response_model=List[AffiliationOut], summary="List affiliations")
 async def list_affiliations(current_doctor=Depends(get_current_doctor)):
-    affiliations = current_doctor.metadata.get('affiliations', [])
-    return [AffiliationOut(**a) for a in affiliations]
+    from apps.doctors.models import DoctorAffiliation
+    affs = await sync_to_async(
+        lambda: list(DoctorAffiliation.objects.filter(doctor=current_doctor).order_by('-start_date')),
+        thread_sensitive=True,
+    )()
+    return [AffiliationOut(id=str(a.id), hospital_name=a.hospital_name, role=a.role,
+                           start_date=str(a.start_date) if a.start_date else '',
+                           end_date=str(a.end_date) if a.end_date else None,
+                           is_current=a.is_current) for a in affs]
 
 
 @router.patch("/profile/me/affiliations/{aff_id}/", response_model=AffiliationOut, summary="Update affiliation")
 async def update_affiliation(aff_id: str, aff: AffiliationCreate, current_doctor=Depends(get_current_doctor)):
+    from apps.doctors.models import DoctorAffiliation
+
     def _update():
-        affiliations = current_doctor.metadata.get('affiliations', [])
-        for i, a in enumerate(affiliations):
-            if a['id'] == aff_id:
-                affiliations[i].update({
-                    "hospital_name": aff.hospital_name, "role": aff.role,
-                    "start_date": str(aff.start_date),
-                    "end_date": str(aff.end_date) if aff.end_date else None,
-                    "is_current": aff.is_current,
-                })
-                current_doctor.metadata['affiliations'] = affiliations
-                current_doctor.save(update_fields=['metadata'])
-                return affiliations[i]
-        raise HTTPException(status_code=404, detail="Affiliation not found")
+        try:
+            a = DoctorAffiliation.objects.get(id=aff_id, doctor=current_doctor)
+        except DoctorAffiliation.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Affiliation not found")
+        a.hospital_name = aff.hospital_name
+        a.role = aff.role
+        a.start_date = aff.start_date
+        a.end_date = aff.end_date
+        a.is_current = aff.is_current
+        a.save()
+        return a
 
     try:
-        aff_data = await sync_to_async(_update, thread_sensitive=True)()
+        a = await sync_to_async(_update, thread_sensitive=True)()
     except HTTPException:
         raise
-    return AffiliationOut(**aff_data)
+    return AffiliationOut(id=str(a.id), hospital_name=a.hospital_name, role=a.role,
+                          start_date=str(a.start_date) if a.start_date else '',
+                          end_date=str(a.end_date) if a.end_date else None,
+                          is_current=a.is_current)
 
 
 @router.delete("/profile/me/affiliations/{aff_id}/", status_code=204, summary="Delete affiliation")
 async def delete_affiliation(aff_id: str, current_doctor=Depends(get_current_doctor)):
-    def _delete():
-        affiliations = current_doctor.metadata.get('affiliations', [])
-        new_affiliations = [a for a in affiliations if a['id'] != aff_id]
-        if len(new_affiliations) == len(affiliations):
-            raise HTTPException(status_code=404, detail="Affiliation not found")
-        current_doctor.metadata['affiliations'] = new_affiliations
-        current_doctor.save(update_fields=['metadata'])
-
-    try:
-        await sync_to_async(_delete, thread_sensitive=True)()
-    except HTTPException:
-        raise
+    from apps.doctors.models import DoctorAffiliation
+    deleted = await sync_to_async(
+        lambda: DoctorAffiliation.objects.filter(id=aff_id, doctor=current_doctor).delete()[0],
+        thread_sensitive=True,
+    )()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Affiliation not found")
 
 
 @router.get("/profile/me/verification/", summary="Get verification status")
@@ -625,21 +627,20 @@ async def list_saved_jobs(
     page_size: int = Query(20, ge=1, le=100),
     current_doctor=Depends(get_current_doctor),
 ):
-    from apps.jobs.models import JobPost
+    from apps.jobs.models import JobSave
 
     def _list():
-        saved_ids = current_doctor.metadata.get('saved_jobs', [])
-        qs = JobPost.objects.filter(id__in=saved_ids, status='PUBLISHED').select_related('hospital')
+        qs = JobSave.objects.filter(doctor=current_doctor).select_related('job__hospital')
         total = qs.count()
-        results = list(qs[(page - 1) * page_size: page * page_size])
+        results = list(qs.order_by('-created_at')[(page - 1) * page_size: page * page_size])
         return total, results
 
     total, results = await sync_to_async(_list, thread_sensitive=True)()
     return {
         "total": total, "page": page,
-        "results": [{"id": str(j.id), "title": j.title, "hospital_name": j.hospital.name,
-                     "job_type": j.job_type, "location": j.location or {},
-                     "is_urgent": j.is_urgent} for j in results]
+        "results": [{"id": str(s.job_id), "title": s.job.title, "hospital_name": s.job.hospital.name,
+                     "job_type": s.job.job_type, "location": s.job.location or {},
+                     "is_urgent": s.job.is_urgent} for s in results]
     }
 
 

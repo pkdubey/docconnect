@@ -164,7 +164,6 @@ async def list_connections(
 
 @router.post("/follow/{user_id}/", response_model=SuccessOut, status_code=201)
 async def follow_user(user_id: str, current_user=Depends(get_current_user)):
-    from apps.hospitals.models import Hospital, HospitalFollow
     from django.contrib.auth import get_user_model
 
     def _follow():
@@ -173,15 +172,20 @@ async def follow_user(user_id: str, current_user=Depends(get_current_user)):
             target_user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             raise HTTPException(status_code=404, detail="User not found")
-        # Follow hospital if target is hospital admin
-        if target_user.user_type in ('HOSPITAL_ADMIN',):
+        if str(target_user.id) == str(current_user.id):
+            raise HTTPException(status_code=400, detail="Cannot follow yourself")
+        # Hospital follow
+        if target_user.user_type == 'HOSPITAL_ADMIN':
             try:
-                from apps.hospitals.models import HospitalUser
+                from apps.hospitals.models import HospitalFollow, HospitalUser
                 hu = HospitalUser.objects.select_related('hospital').get(user=target_user)
                 HospitalFollow.objects.get_or_create(user=current_user, hospital=hu.hospital)
                 return f"Now following {hu.hospital.name}"
             except Exception:
                 pass
+        # Doctor-to-doctor follow
+        from apps.doctors.models import Follow
+        Follow.objects.get_or_create(follower=current_user, following=target_user)
         return "Followed"
 
     try:
@@ -193,7 +197,6 @@ async def follow_user(user_id: str, current_user=Depends(get_current_user)):
 
 @router.delete("/follow/{user_id}/", response_model=SuccessOut)
 async def unfollow_user(user_id: str, current_user=Depends(get_current_user)):
-    from apps.hospitals.models import HospitalFollow
     from django.contrib.auth import get_user_model
 
     def _unfollow():
@@ -204,11 +207,14 @@ async def unfollow_user(user_id: str, current_user=Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="User not found")
         if target_user.user_type == 'HOSPITAL_ADMIN':
             try:
-                from apps.hospitals.models import HospitalUser
+                from apps.hospitals.models import HospitalFollow, HospitalUser
                 hu = HospitalUser.objects.select_related('hospital').get(user=target_user)
                 HospitalFollow.objects.filter(user=current_user, hospital=hu.hospital).delete()
+                return
             except Exception:
                 pass
+        from apps.doctors.models import Follow
+        Follow.objects.filter(follower=current_user, following=target_user).delete()
 
     try:
         await sync_to_async(_unfollow, thread_sensitive=True)()
@@ -221,18 +227,18 @@ async def unfollow_user(user_id: str, current_user=Depends(get_current_user)):
 
 @router.post("/block/{user_id}/", response_model=SuccessOut, status_code=201)
 async def block_user(user_id: str, current_user=Depends(get_current_user)):
-    from apps.messaging.models import ConversationParticipant
     from django.contrib.auth import get_user_model
 
     def _block():
         User = get_user_model()
-        if not User.objects.filter(id=user_id).exists():
+        try:
+            target = User.objects.get(id=user_id)
+        except User.DoesNotExist:
             raise HTTPException(status_code=404, detail="User not found")
-        blocked = current_user.metadata.get('blocked_users', [])
-        if user_id not in blocked:
-            blocked.append(user_id)
-            current_user.metadata['blocked_users'] = blocked
-            current_user.save(update_fields=['metadata'])
+        if str(target.id) == str(current_user.id):
+            raise HTTPException(status_code=400, detail="Cannot block yourself")
+        from apps.doctors.models import Block
+        Block.objects.get_or_create(blocker=current_user, blocked=target)
 
     try:
         await sync_to_async(_block, thread_sensitive=True)()
@@ -243,21 +249,24 @@ async def block_user(user_id: str, current_user=Depends(get_current_user)):
 
 @router.delete("/block/{user_id}/", response_model=SuccessOut)
 async def unblock_user(user_id: str, current_user=Depends(get_current_user)):
-    def _unblock():
-        blocked = current_user.metadata.get('blocked_users', [])
-        if user_id in blocked:
-            blocked.remove(user_id)
-            current_user.metadata['blocked_users'] = blocked
-            current_user.save(update_fields=['metadata'])
-
-    await sync_to_async(_unblock, thread_sensitive=True)()
+    from apps.doctors.models import Block
+    deleted = await sync_to_async(
+        lambda: Block.objects.filter(blocker=current_user, blocked_id=user_id).delete()[0],
+        thread_sensitive=True,
+    )()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Block not found")
     return SuccessOut(success=True, message="User unblocked")
 
 
 @router.get("/blocked/", response_model=dict)
 async def list_blocked(current_user=Depends(get_current_user)):
-    blocked = current_user.metadata.get('blocked_users', [])
-    return {"blocked_users": blocked, "total": len(blocked)}
+    from apps.doctors.models import Block
+    blocks = await sync_to_async(
+        lambda: list(Block.objects.filter(blocker=current_user).values_list('blocked_id', flat=True)),
+        thread_sensitive=True,
+    )()
+    return {"blocked_users": [str(b) for b in blocks], "total": len(blocks)}
 
 
 # ── Reports ───────────────────────────────────────────────────
@@ -288,3 +297,40 @@ reports_router = APIRouter(prefix="/api/v1/reports", tags=["Reports"])
 async def submit_report_toplevel(body: ReportCreate, current_user=Depends(get_current_user)):
     """Report a profile/post/comment/job/hospital."""
     return await submit_report(body, current_user)
+
+
+@reports_router.post("/{report_id}/evidence/", status_code=201)
+async def upload_report_evidence(
+    report_id: str,
+    file=__import__('fastapi').File(...),
+    evidence_type: str = __import__('fastapi').Form("SCREENSHOT"),
+    current_user=Depends(get_current_user),
+):
+    """Attach evidence file to a report."""
+    from apps.core.services.storage import upload_file_to_s3
+    from apps.core.models import Report, ReportEvidence
+    from fastapi import UploadFile
+
+    def _check():
+        try:
+            return Report.objects.get(id=report_id, reporter=current_user)
+        except Report.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+    try:
+        await sync_to_async(_check, thread_sensitive=True)()
+    except HTTPException:
+        raise
+
+    file_id = await upload_file_to_s3(file, folder="report-evidence")
+
+    def _create_evidence():
+        return ReportEvidence.objects.create(
+            report_id=report_id,
+            evidence_file_id=file_id,
+            evidence_type=evidence_type,
+            uploaded_by=current_user,
+        )
+
+    ev = await sync_to_async(_create_evidence, thread_sensitive=True)()
+    return {"success": True, "evidence_id": str(ev.id), "file_id": str(file_id)}

@@ -505,27 +505,32 @@ async def update_application_status(
 
 @router.post("/{job_id}/save/", status_code=201, summary="Save a job")
 async def save_job(job_id: str, current_doctor=Depends(get_current_doctor)):
-    def _save():
-        saved = current_doctor.metadata.get('saved_jobs', [])
-        if job_id not in saved:
-            saved.append(job_id)
-            current_doctor.metadata['saved_jobs'] = saved
-            current_doctor.save(update_fields=['metadata'])
+    from apps.jobs.models import JobSave, JobPost
 
-    await sync_to_async(_save, thread_sensitive=True)()
+    def _save():
+        try:
+            job = JobPost.objects.get(id=job_id)
+        except JobPost.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Job not found")
+        JobSave.objects.get_or_create(doctor=current_doctor, job=job)
+
+    try:
+        await sync_to_async(_save, thread_sensitive=True)()
+    except HTTPException:
+        raise
     return {"success": True, "message": "Job saved"}
 
 
 @router.delete("/{job_id}/save/", summary="Unsave a job")
 async def unsave_job(job_id: str, current_doctor=Depends(get_current_doctor)):
-    def _unsave():
-        saved = current_doctor.metadata.get('saved_jobs', [])
-        if job_id in saved:
-            saved.remove(job_id)
-            current_doctor.metadata['saved_jobs'] = saved
-            current_doctor.save(update_fields=['metadata'])
+    from apps.jobs.models import JobSave
 
-    await sync_to_async(_unsave, thread_sensitive=True)()
+    deleted = await sync_to_async(
+        lambda: JobSave.objects.filter(doctor=current_doctor, job_id=job_id).delete()[0],
+        thread_sensitive=True,
+    )()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Saved job not found")
     return {"success": True, "message": "Job unsaved"}
 
 

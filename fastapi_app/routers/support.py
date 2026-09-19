@@ -154,6 +154,38 @@ async def admin_list_tickets(
     }
 
 
+@router.get("/api/v1/admin/support/tickets/{ticket_id}/")
+async def admin_get_ticket(ticket_id: str, current_user=Depends(get_current_user)):
+    if current_user.user_type != "ADMIN":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    def _get():
+        from apps.core.models import SupportTicket
+        try:
+            t = SupportTicket.objects.select_related('user', 'assigned_to').prefetch_related('messages__sender').get(id=ticket_id)
+        except SupportTicket.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        return t
+
+    try:
+        t = await sync_to_async(_get, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {
+        "id": str(t.id), "subject": t.subject, "description": t.description,
+        "category": t.category, "status": t.status,
+        "user_id": str(t.user_id), "user_phone": t.user.phone,
+        "assigned_to": str(t.assigned_to_id) if t.assigned_to_id else None,
+        "resolved_at": t.resolved_at.isoformat() if t.resolved_at else None,
+        "created_at": t.created_at.isoformat(),
+        "messages": [{
+            "id": str(m.id), "message": m.message,
+            "sender_id": str(m.sender_id), "is_internal": m.is_internal,
+            "created_at": m.created_at.isoformat(),
+        } for m in t.messages.all()],
+    }
+
+
 @router.patch("/api/v1/admin/support/tickets/{ticket_id}/")
 async def admin_update_ticket(
     ticket_id: str, body: TicketStatusUpdate, current_user=Depends(get_current_user)
@@ -172,6 +204,36 @@ async def admin_update_ticket(
     except HTTPException:
         raise
     return {"success": True, "ticket_id": ticket_id, "status": body.status}
+
+
+class TicketAssign(BaseModel):
+    admin_user_id: str
+
+
+@router.post("/api/v1/admin/support/tickets/{ticket_id}/assign/")
+async def admin_assign_ticket(ticket_id: str, body: TicketAssign, current_user=Depends(get_current_user)):
+    if current_user.user_type != "ADMIN":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    def _assign():
+        from django.contrib.auth import get_user_model
+        from apps.core.models import SupportTicket
+        User = get_user_model()
+        try:
+            assignee = User.objects.get(id=body.admin_user_id, user_type='ADMIN')
+        except User.DoesNotExist:
+            raise HTTPException(status_code=404, detail="Admin user not found")
+        updated = SupportTicket.objects.filter(id=ticket_id).update(
+            assigned_to=assignee, status='IN_PROGRESS'
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+    try:
+        await sync_to_async(_assign, thread_sensitive=True)()
+    except HTTPException:
+        raise
+    return {"success": True, "ticket_id": ticket_id, "assigned_to": body.admin_user_id}
 
 
 @router.post("/api/v1/admin/support/tickets/{ticket_id}/resolve/")

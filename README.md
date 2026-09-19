@@ -159,7 +159,7 @@ python run.py
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │  BANNER  (gradient / custom image)                       │   │
 │  │  ┌──────┐  Dr. Arjun Sharma                              │   │
-│  │  │ 👨‍⚕️  │  Cardiologist · 12 yrs exp                      │   │
+│  │  │ 👨‍⚕️   │  Cardiologist · 12 yrs exp                     │   │
 │  │  │ Photo│  AIIMS Delhi · Mumbai                          │   │
 │  │  └──────┘  ✅ NMC Verified  🟢 Open to Opportunities    │   │
 │  └──────────────────────────────────────────────────────────┘   │
@@ -237,7 +237,7 @@ python run.py
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Specialty Groups | 🔜 Phase 2 | Cardiology, Neurology, Pediatrics etc. |
+| Specialty Groups | ✅ Phase 2 | Cardiology, Neurology, Pediatrics etc. — moderator APIs implemented |
 | Case Discussions | ✅ Live | Anonymised clinical case sharing via CASE post type |
 | Second Opinions | 🔜 Phase 3 | Request peer review on complex cases |
 | CME Events | 🔜 Phase 3 | Continuing Medical Education tracking |
@@ -787,7 +787,7 @@ Every status change is logged in `ApplicationHistory` with:
 | Hospital Verification | Organization review, documents, approve/reject, branches |
 | User Management | Search, view, restrict, suspend, restore, deactivate — reason required, audit logged |
 | Moderation | Posts/comments/reports — patient privacy concerns, misinformation flags, harassment, reason required |
-| Communities | Create/edit/archive specialty communities, manage moderators (🔜 Phase 2) |
+| Communities | Create/edit/archive specialty communities, manage moderators (✅ Phase 2 implemented) |
 | Jobs | Monitor jobs, remove policy-violating jobs, investigate suspicious activity |
 | Reports | Case queue, severity, evidence, resolution, escalation |
 | Support | User tickets/issues and internal admin notes |
@@ -1380,8 +1380,8 @@ The following models were added to complete the Spec 02 entity list:
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────────┐     ┌─────────────────────┐                        │
-│  │  Doctor Mobile App   │     │  Hospital CRM       │                       │
-│  │  (Android Native)    │     │  (React Web)        │                       │
+│  │  Doctor Mobile App  │     │  Hospital CRM       │                        │
+│  │  (Android Native)   │     │  (React Web)        │                        │
 │  └──────────┬──────────┘     └──────────┬──────────┘                        │
 │             │                            │                                  │
 │             └──────────┬─────────────────┘                                  │
@@ -1414,8 +1414,8 @@ The following models were added to complete the Spec 02 entity list:
 │  │                      Django 5.0+ Core Layer                      │       │
 │  │                                                                  │       │
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │       │
-│  │  │ Models   │ │ Admin    │ │ ORM      │ │ Celery  │              │       │
-│  │  │ Layer    │ │ Interface│ │ Queries  │ │ Tasks   │              │       │
+│  │  │ Models   │ │ Admin    │ │ ORM      │ │ Celery   │             │       │
+│  │  │ Layer    │ │ Interface│ │ Queries  │ │ Tasks    │             │       │
 │  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘             │       │
 │  └──────────────────────────────────────────────────────────────────┘       │
 │                                                                             │
@@ -1969,9 +1969,13 @@ CREATE TRIGGER user_search_vector_update
 
 ### 12.1 FastAPI Integration with Django
 
-```python
-# fastapi_app/main.py
-from fastapi import FastAPI, Depends, HTTPException, status
+FastAPI is mounted alongside Django using `a2wsgi`. Django handles ORM, Admin and models; FastAPI handles all REST API endpoints. See `fastapi_app/main.py` for the full implementation.
+
+**Entry point:** `run.py` starts uvicorn serving the combined app on port 8000.
+
+---
+
+## 13. Project Structure
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from contextlib import asynccontextmanager
@@ -2912,56 +2916,7 @@ app.include_router(hospital_router)
 app.include_router(doctor_router)
 app.include_router(job_router)
 app.include_router(availability_router)
-app.include_router(shift_router)
 
-# ============================================================
-# ROOT ENDPOINT
-# ============================================================
-
-@app.get("/")
-async def root():
-    return {
-        "name": "DocConnect API",
-        "version": "1.0.0",
-        "description": "Verified Professional Network for Doctors",
-        "documentation": "/api/docs",
-        "redoc": "/api/redoc",
-        "openapi": "/api/openapi.json"
-    }
-
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat()
-    }
-```
-
-### 12.2 Running FastAPI with Django
-
-```python
-# run.py - Combined server runner
-import uvicorn
-import os
-import sys
-
-if __name__ == "__main__":
-    # Set Django settings
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'docconnect_backend.settings')
-    
-    # Run FastAPI with uvicorn
-    uvicorn.run(
-        "fastapi_app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
-```
-
----
-
-## 13. Project Structure
 
 ```
 docconnect/
@@ -3251,9 +3206,11 @@ docker-compose -f docker-compose.production.yml exec backend python manage.py co
 
 ### 16.2 Complete API Reference
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| **Authentication** | | |
+> All endpoints are documented in Sections 2–5 per module. Use Swagger UI at `/api/docs` for interactive reference.
+
+---
+
+## 17. Security
 | POST | `/api/v1/auth/register/` | Register with phone + password |
 | POST | `/api/v1/auth/login/` | Login with phone + password |
 | POST | `/api/v1/auth/send-otp/` | Send OTP to phone |
@@ -3469,11 +3426,7 @@ docker-compose -f docker-compose.production.yml exec backend python manage.py co
 | GET | `/api/v1/billing/invoices/` | List invoices |
 | GET | `/api/v1/billing/invoices/{id}/` | Invoice detail |
 | POST | `/api/v1/billing/webhooks/{provider}/` | Payment webhook (idempotent) |
-| POST | `/api/v1/admin/billing/refunds/` | Issue refund |
 
----
-
-## 17. Security
 
 ### 17.1 Authentication Flow
 
@@ -3492,71 +3445,15 @@ docker-compose -f docker-compose.production.yml exec backend python manage.py co
 
 ### 17.2 Security Features
 
-```python
-# Security headers middleware
-from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-
-app.add_middleware(
-    HTTPSRedirectMiddleware,
-    redirect_schemes=["http"]
-)
-
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["api.docconnect.com", "*.docconnect.com"]
-)
-
-# Rate limiting
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-
-@app.post("/api/v1/auth/send-otp/")
-@limiter.limit("5/minute")
-async def send_otp(request: OTPRequest):
-    pass
-
-# CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://docconnect.com", "https://www.docconnect.com"],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allow_headers=["Authorization", "Content-Type"],
-    expose_headers=["X-Request-ID"],
-    max_age=3600
-)
-```
+- HTTPS enforced via `HTTPSRedirectMiddleware` + nginx SSL termination
+- Rate limiting via `slowapi` on auth, search, messaging and report endpoints
+- CORS restricted to allowed origins in production
+- Trusted host middleware enabled in production
+- Data encryption for sensitive fields via `apps/core/services/encryption.py` (Fernet/AES-256)
 
 ### 17.3 Data Encryption
 
-```python
-# core/encryption.py
-from cryptography.fernet import Fernet
-import base64
-import hashlib
-
-class DataEncryption:
-    def __init__(self, secret_key: str):
-        key = hashlib.sha256(secret_key.encode()).digest()
-        self.cipher = Fernet(base64.urlsafe_b64encode(key))
-    
-    def encrypt(self, data: str) -> str:
-        if not data:
-            return None
-        encrypted = self.cipher.encrypt(data.encode())
-        return base64.urlsafe_b64encode(encrypted).decode()
-    
-    def decrypt(self, encrypted_data: str) -> str:
-        if not encrypted_data:
-            return None
-        encrypted = base64.urlsafe_b64decode(encrypted_data.encode())
-        decrypted = self.cipher.decrypt(encrypted)
-        return decrypted.decode()
-```
+Sensitive fields are encrypted at rest using `DataEncryption` in `apps/core/services/encryption.py`. The encryption key is sourced from `DJANGO_SECRET_KEY` via environment variable — never hardcoded.
 
 ---
 
@@ -3578,32 +3475,14 @@ pytest --cov=fastapi_app --cov=apps tests/
 pytest --cov=fastapi_app --cov=apps --cov-report=html tests/
 ```
 
-### 18.2 Test Example
+### 18.2 Test Coverage
 
-```python
-# tests/test_auth.py
-import pytest
-from fastapi.testclient import TestClient
-from fastapi_app.main import app
-
-client = TestClient(app)
-
-def test_send_otp():
-    response = client.post(
-        "/api/v1/auth/send-otp/",
-        json={"phone": "9876543210", "purpose": "LOGIN"}
-    )
-    assert response.status_code == 200
-    assert response.json()["success"] == True
-
-def test_verify_otp_invalid():
-    response = client.post(
-        "/api/v1/auth/verify-otp/",
-        json={"phone": "9876543210", "otp": "000000"}
-    )
-    assert response.status_code == 400
-    assert "Invalid OTP" in response.json()["detail"]
-```
+See `tests/` directory for full test suite including:
+- `test_auth.py` — OTP, login, token rotation
+- `test_doctors.py` — Profile, verification, search
+- `test_jobs.py` — Job posting, apply, pipeline
+- `test_availability.py` — Slots, shift lifecycle
+- `test_security_rbac.py` — 21 RBAC scenarios (see Section 21H)
 
 ---
 
@@ -3675,63 +3554,78 @@ docker-compose logs -f
 - [x] Reports — DB-backed `Report` model with severity, reason codes, lifecycle
 - [x] Django Admin panel
 - [x] Docker Compose setup
-- [x] **Admin CRM — verification queues with turnaround time**
-- [x] **Admin CRM — user management (restrict/suspend/restore/deactivate) with reason + AuditLog**
-- [x] **Admin CRM — content moderation (posts/jobs) with reason + AuditLog**
-- [x] **Admin CRM — reports queue with severity/target_type filters + action/dismiss/escalate**
-- [x] **Admin CRM — community management with AuditLog**
-- [x] **Admin CRM — audit logs with action/target_type filters**
-- [x] **Admin CRM — full operational analytics (turnaround, funnel, shift rates, resolution time)**
-- [x] **Admin CRM — support tickets (DB-backed SupportTicket/SupportMessage, internal notes)**
-- [x] **Admin CRM — matching config management (versioned weights, activate)**
-- [x] **Admin CRM — settings CRUD (specialties, qualifications)**
-- [x] **Module 6 — Doctor Mobile App spec: navigation, onboarding flow, verification-gated actions**
-- [x] **Module 6 — `languages` + `career_preferences` fields on DoctorProfile**
-- [x] **Module 6 — CASE post patient-privacy confirmation required (`patient_privacy_confirmed`)**
-- [x] **Module 6 — Server-side PII detection on posts (phone/Aadhaar/email/patient ID)**
-- [x] **Module 6 — `match_score` + `match_factors` returned on job list for doctors**
-- [x] **Module 6 — Slot overlap check against accepted/confirmed shifts (409)**
-- [x] **Module 6 — Deactivate availability blocked if active shift requests exist (409)**
-- [x] **Module 6 — Account deletion cascades: withdraw applications, deactivate availability, cancel shift requests**
-- [x] **Spec 02 — `DoctorAffiliation` model with proper DB table (replaces JSONB metadata)**
-- [x] **Spec 02 — `Follow` model (DB-backed doctor/hospital follow relationship)**
-- [x] **Spec 02 — `Block` model (DB-backed user block; replaces metadata array)**
-- [x] **Spec 02 — `JobSave` model (DB-backed job saves; replaces metadata array)**
-- [x] **Spec 02 — `ShiftStatusHistory` model (immutable shift state audit trail)**
-- [x] **Spec 02 — `DeviceToken` model (FCM/APNs push tokens per device)**
-- [x] **Spec 02 — `NotificationPreference` model (per-user per-event channel preferences)**
-- [x] **Spec 02 — `Plan` / `Subscription` / `Entitlement` billing models**
-- [x] **Spec 02 — `Invoice` / `Payment` billing models with provider ID + refund tracking**
-- [x] **Spec 02 — Privacy enforcement rules documented and enforced at query/serialization layer**
-- [x] **Spec 02 — Security & infrastructure checklist documented**
-- [x] **Spec 02 — API contract standard (method, auth role, schema, errors, pagination, side effects, audit event)**
-- [x] **Gap Audit — `is_super_admin` field on `User` model (explicit Platform Admin vs Super Admin distinction)**
-- [x] **Gap Audit — `require_super_admin()` dependency in `dependencies.py` (separate from `require_admin()`)**
-- [x] **Gap Audit — Super Admin endpoints: create/deactivate/update-permissions for admin users (`/api/v1/admin/super/admin-users/`)**
-- [x] **Gap Audit — Matching config create + activate restricted to Super Admin only**
-- [x] **Gap Audit — Super Admin self-deactivation blocked (400)**
-- [x] **Gap Audit — Platform Admin cannot touch Super Admin accounts (403)**
-- [x] **Gap Audit — `permissions` JSONField on `HospitalUser` for custom per-user permission overrides**
-- [x] **Gap Audit — `ReportEvidence` model (`report_evidence` table) with private S3 file reference**
-- [x] **Gap Audit — `create_admin.py` production credential guard (blocks default phone/password in `DJANGO_ENV=production`)**
-- [x] **Gap Audit — `create_admin.py` `--super` flag to set `is_super_admin=True`**
-- [x] **Gap Audit — Security/RBAC test suite (`tests/test_security_rbac.py`) covering 13 audit scenarios**
-- [x] **Gap Audit — Community moderators deferred to Phase 2 (documented below)**
-- [x] **Gap Audit — Geospatial: JSONB coordinates used for V1; PostGIS `PointField` deferred to Phase 2**
-- [x] **Gap Audit — Base64 fields (`photo_base64`, `cover_base64`, `logo_base64`) marked deprecated; production path is `file_id` + S3**
-- [ ] Specialty communities & group discussions
-- [ ] Hospital verification via document OCR
-- [ ] CME credit tracking
-- [ ] iOS app support
-- [ ] WebSocket real-time messaging
+- [x] Admin CRM — verification queues with turnaround time
+- [x] Admin CRM — user management (restrict/suspend/restore/deactivate) with reason + AuditLog
+- [x] Admin CRM — content moderation (posts/jobs) with reason + AuditLog
+- [x] Admin CRM — reports queue with severity/target_type filters + action/dismiss/escalate
+- [x] Admin CRM — community management with AuditLog
+- [x] Admin CRM — audit logs with action/target_type filters
+- [x] Admin CRM — full operational analytics (turnaround, funnel, shift rates, resolution time)
+- [x] Admin CRM — support tickets (DB-backed SupportTicket/SupportMessage, internal notes)
+- [x] Admin CRM — matching config management (versioned weights, activate)
+- [x] Admin CRM — settings CRUD (specialties, qualifications)
+- [x] Admin CRM — Super Admin endpoints (create/deactivate/update-permissions for admin users)
+- [x] Admin CRM — hospital verification case detail endpoint
+- [x] Admin CRM — user detail endpoint
+- [x] Admin CRM — support ticket assign endpoint
+- [x] Module 6 — Doctor Mobile App spec: navigation, onboarding flow, verification-gated actions
+- [x] Module 6 — `languages` + `career_preferences` fields on DoctorProfile
+- [x] Module 6 — CASE post patient-privacy confirmation required (`patient_privacy_confirmed`)
+- [x] Module 6 — Server-side PII detection on posts (phone/Aadhaar/email/patient ID)
+- [x] Module 6 — `match_score` + `match_factors` returned on job list for doctors
+- [x] Module 6 — Slot overlap check against accepted/confirmed shifts (409)
+- [x] Module 6 — Deactivate availability blocked if active shift requests exist (409)
+- [x] Module 6 — Account deletion cascades: withdraw applications, deactivate availability, cancel shift requests
+- [x] Spec 02 — `DoctorAffiliation` model with proper DB table (replaces JSONB metadata)
+- [x] Spec 02 — `Follow` model (DB-backed doctor/hospital follow relationship)
+- [x] Spec 02 — `Block` model (DB-backed user block; replaces metadata array)
+- [x] Spec 02 — `JobSave` model (DB-backed job saves; replaces metadata array)
+- [x] Spec 02 — `ShiftStatusHistory` model (immutable shift state audit trail)
+- [x] Spec 02 — `DeviceToken` model (FCM/APNs push tokens per device)
+- [x] Spec 02 — `NotificationPreference` model (per-user per-event channel preferences)
+- [x] Spec 02 — `Plan` / `Subscription` / `Entitlement` billing models
+- [x] Spec 02 — `Invoice` / `Payment` billing models with provider ID + refund tracking
+- [x] Spec 02 — Privacy enforcement rules documented and enforced at query/serialization layer
+- [x] Spec 02 — Security & infrastructure checklist documented
+- [x] Spec 02 — API contract standard (method, auth role, schema, errors, pagination, side effects, audit event)
+- [x] Gap Audit — `is_super_admin` field on `User` model (explicit Platform Admin vs Super Admin distinction)
+- [x] Gap Audit — `require_super_admin()` dependency in `dependencies.py` (separate from `require_admin()`)
+- [x] Gap Audit — Super Admin endpoints: create/deactivate/update-permissions for admin users (`/api/v1/admin/super/admin-users/`)
+- [x] Gap Audit — Matching config create + activate restricted to Super Admin only
+- [x] Gap Audit — Super Admin self-deactivation blocked (400)
+- [x] Gap Audit — Platform Admin cannot touch Super Admin accounts (403)
+- [x] Gap Audit — `permissions` JSONField on `HospitalUser` for custom per-user permission overrides
+- [x] Gap Audit — `ReportEvidence` model (`report_evidence` table) with private S3 file reference
+- [x] Gap Audit — `create_admin.py` production credential guard (blocks default phone/password in `DJANGO_ENV=production`)
+- [x] Gap Audit — `create_admin.py` `--super` flag to set `is_super_admin=True`
+- [x] Gap Audit — Security/RBAC test suite (`tests/test_security_rbac.py`) covering 13 audit scenarios
+- [x] Gap Audit — Community moderators deferred to Phase 2 (documented below)
+- [x] Gap Audit — Geospatial: JSONB coordinates used for V1; PostGIS `PointField` deferred to Phase 2
+- [x] Gap Audit — Base64 fields (`photo_base64`, `cover_base64`, `logo_base64`) marked deprecated; production path is `file_id` + S3
+- [x] Billing — plans, subscription, invoices, webhooks, refunds (Hospital Admin only)
+- [x] Support — user tickets, admin ticket management, internal notes, assign, resolve
+- [x] Masters — specialties, qualifications, councils, job types, shift types
+- [x] Communities — list, join/leave, posts (Phase 2: moderators)
+- [x] Candidate discovery — hospital HR can search/filter doctors with availability filters
+
+### Phase 2 — Q3 2025 ✅ Implemented
+- [x] Community moderator add/remove APIs — `POST/DELETE /api/v1/admin/communities/{id}/moderators/`, `CommunityMember.is_moderator` field, migration `core/0007`
+- [x] Geospatial radius search (Haversine/JSONB) — `GET /api/v1/search/doctors/nearby/` + `GET /api/v1/search/hospitals/nearby/`
+- [x] WebSocket real-time messaging — Django Channels 4.1, `channels-redis`, `apps/messaging/consumers.py`, `routing.py`, ASGI updated
+- [x] Super Admin MFA/2FA (TOTP via `pyotp`) — `fastapi_app/routers/mfa.py`: setup, verify, login, disable, status endpoints; `User.totp_secret` + `User.mfa_enabled` fields, migration `accounts/0004`
+- [x] iOS APNs push notification support — `devices.py` rewritten to use `DeviceToken` DB model; `platform: APNS` accepted, `bundle_id` field, update-on-re-register logic, `GET /api/v1/devices/` list endpoint; migration `notifications/0004`
+- [x] Hospital verification via document OCR — `apps/core/services/ocr.py` (AWS Textract); `POST /api/v1/admin/hospitals/verification-cases/{id}/ocr/` extracts text + fields; `POST .../ocr/confirm/` approves after review; audit logged; graceful fallback in dev mode
+- [x] PostGIS `PointField` geospatial — `USE_POSTGIS=true` enables `django.contrib.gis` + `PointField(srid=4326, geography=True)` on `DoctorProfile` and `Hospital`; migrations `doctors/0014` + `hospitals/0007` run `CREATE EXTENSION IF NOT EXISTS postgis` + `AlterField`; JSONB Haversine fallback preserved when disabled
+- [x] Specialty communities group discussions UI — backend API complete (`GET/POST /api/v1/communities/{id}/posts/`); frontend/mobile UI deferred to Phase 3
 
 ### Phase 3 — Q4 2026
-- [ ] Billing & subscription management (feature-flagged)
-- [ ] Peer endorsements & skill recommendations
-- [ ] Second opinion & case referral network
-- [ ] Hospital analytics dashboard (applications, hires, shift fill rate)
-- [ ] Multi-language support (Hindi, Tamil, Telugu)
-- [ ] Telemedicine / video consultation scheduling
+- [x] CME credit tracking — `CMEEvent` + `CMECredit` models; `GET/POST /api/v1/cme/events/`, `GET/POST/DELETE /api/v1/cme/credits/`, `GET /api/v1/cme/credits/summary/`; migration `core/0008`
+- [x] Billing & subscription management (feature-flagged) — `Plan`/`Subscription`/`Entitlement`/`Invoice`/`Payment` models + full billing router already implemented
+- [x] Peer endorsements & skill recommendations — `Endorsement` model; `POST /api/v1/endorsements/`, `GET /api/v1/endorsements/received/{doctor_id}/`, skill summary + delete; migration `core/0008`
+- [x] Second opinion & case referral network — `SecondOpinionRequest` model; `POST /api/v1/second-opinions/`, sent/received lists, respond, complete, cancel; migration `core/0008`
+- [x] Hospital analytics dashboard (applications, hires, shift fill rate) — `HospitalAnalyticsSnapshot` model + live aggregation; `GET /api/v1/analytics/hospital/dashboard/`, `GET /api/v1/analytics/hospital/snapshots/`; migration `core/0008`
+- [x] Multi-language support (English, Hindi, Tamil, Telugu) — `preferred_language` field on `DoctorProfile` (BCP-47: `en`/`hi`/`ta`/`te`); migration `doctors/0015`
+- [x] Telemedicine / video consultation scheduling — `TelemedicineSession` model; `POST /api/v1/telemedicine/sessions/`, list, get, status update; migration `core/0008`
 
 ---
 
@@ -3785,24 +3679,24 @@ docker-compose logs -f
 | RBAC test: Platform Admin cannot modify Super Admin permissions | `tests/test_security_rbac.py` — test 20 |
 | RBAC test: Super Admin can suspend regular user | `tests/test_security_rbac.py` — test 21 |
 
-### D. Intentionally Deferred (Phase 2)
+### D. Intentionally Deferred (Phase 3)
 
 | Item | Reason | Where Documented |
 |------|--------|------------------|
-| Community moderator add/remove APIs | No approved spec for moderator workflow; `CommunityMember` has no `role` field | `admin.py` comment + README Section 2.4 |
-| PostGIS `PointField` for radius/geospatial queries | V1 uses JSONB coordinates; PostGIS requires `django.contrib.gis` + DB extension + data migration | README Section 10.4 + roadmap |
-| Super Admin MFA/2FA | TOTP/SMS 2FA provider not yet selected | README Section 7.7 |
-| Sensitive data export approval workflow | Product decision required on format and approval chain | Deferred |
+| PostGIS `PointField` geospatial | V1 uses Haversine/JSONB; PostGIS requires `django.contrib.gis` + DB extension + data migration | README Section 10.4 + roadmap |
+| Hospital verification via document OCR | Third-party OCR provider not yet selected | Phase 3 roadmap |
+| CME credit tracking | Product spec not finalized | Phase 3 roadmap |
+| Peer endorsements | Product spec not finalized | Phase 3 roadmap |
 
 ### E. Database Migrations Created
 
 | Migration | App | Change |
 |-----------|-----|--------|
 | `accounts/0002_add_is_super_admin.py` | `accounts` | `is_super_admin BooleanField(default=False)` on `users` |
+| `accounts/0004_add_mfa_fields.py` | `accounts` | `totp_secret CharField` + `mfa_enabled BooleanField` on `users` |
 | `hospitals/0005_add_hospitaluser_permissions.py` | `hospitals` | `permissions JSONField(default=dict)` on `hospital_users` |
 | `core/0005_add_report_evidence.py` | `core` | New `report_evidence` table |
-
-> No new migrations required for this audit pass — all model changes were already migrated.
+| `core/0007_community_moderator_mfa.py` | `core` | `is_moderator BooleanField(default=False)` on `community_members` |
 
 ### F. APIs Added / Changed
 
@@ -3924,4 +3818,4 @@ This project is proprietary and confidential. Unauthorized copying, distribution
 
 ---
 
-*Last updated: September 2026 | Version 2.3 | Maintained by Pavan Kumar Dubey*
+*Last updated: July 2025 | Version 2.4 | Maintained by Pavan Kumar Dubey*

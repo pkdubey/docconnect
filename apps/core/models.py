@@ -67,6 +67,7 @@ class CommunityMember(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name='members')
     user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='community_memberships')
+    is_moderator = models.BooleanField(default=False)
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -376,3 +377,162 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment {self.provider_payment_id} — {self.status}"
+
+
+# ── Phase 3 Models ────────────────────────────────────────────
+
+class CMEEvent(models.Model):
+    """CME event / course that doctors can log credits against."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=255)
+    provider = models.CharField(max_length=255)  # organising body
+    specialty_id = models.UUIDField(null=True, blank=True)
+    credit_hours = models.DecimalField(max_digits=6, decimal_places=2)
+    event_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'cme_events'
+        ordering = ['-event_date']
+
+    def __str__(self):
+        return f"{self.title} ({self.credits} credits)"
+
+
+class CMECredit(models.Model):
+    """Doctor's logged CME credit — either against a platform event or self-reported."""
+    STATUS = [
+        ('PENDING', 'Pending'),
+        ('VERIFIED', 'Verified'),
+        ('REJECTED', 'Rejected'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    doctor = models.ForeignKey('doctors.DoctorProfile', on_delete=models.CASCADE, related_name='cme_credits')
+    event = models.ForeignKey(CMEEvent, on_delete=models.SET_NULL, null=True, blank=True, related_name='credits')
+    title = models.CharField(max_length=255)  # used when event is null (self-reported)
+    provider = models.CharField(max_length=255, null=True, blank=True)
+    credits = models.DecimalField(max_digits=6, decimal_places=2)
+    completion_date = models.DateField()
+    certificate_file_id = models.UUIDField(null=True, blank=True)  # S3 reference
+    status = models.CharField(max_length=20, choices=STATUS, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'cme_credits'
+        ordering = ['-completion_date']
+        indexes = [models.Index(fields=['doctor', 'status'])]
+
+    def __str__(self):
+        return f"{self.doctor} — {self.title} ({self.credits} cr)"
+
+
+class Endorsement(models.Model):
+    """Peer skill endorsement between verified doctors."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    endorser = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='endorsements_given')
+    endorsed = models.ForeignKey('doctors.DoctorProfile', on_delete=models.CASCADE, related_name='endorsements')
+    skill = models.CharField(max_length=100)  # free-text skill / specialization name
+    note = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'endorsements'
+        unique_together = ('endorser', 'endorsed', 'skill')
+        indexes = [models.Index(fields=['endorsed', 'skill'])]
+
+    def __str__(self):
+        return f"{self.endorser_id} endorsed {self.endorsed_id} for {self.skill}"
+
+
+class SecondOpinionRequest(models.Model):
+    """Doctor requests a second opinion / case referral from a peer."""
+    STATUS = [
+        ('PENDING', 'Pending'),
+        ('ACCEPTED', 'Accepted'),
+        ('DECLINED', 'Declined'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requester = models.ForeignKey('doctors.DoctorProfile', on_delete=models.CASCADE, related_name='opinion_requests_sent')
+    reviewer = models.ForeignKey('doctors.DoctorProfile', on_delete=models.CASCADE, related_name='opinion_requests_received')
+    post = models.ForeignKey('doctors.Post', on_delete=models.SET_NULL, null=True, blank=True, related_name='opinion_requests')  # linked CASE post
+    clinical_summary = models.TextField()
+    is_anonymous = models.BooleanField(default=True)  # patient details anonymised
+    status = models.CharField(max_length=20, choices=STATUS, default='PENDING')
+    response = models.TextField(null=True, blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'second_opinion_requests'
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['reviewer', 'status'])]
+
+    def __str__(self):
+        return f"OpinionRequest {self.id} ({self.status})"
+
+
+class TelemedicineSession(models.Model):
+    """Telemedicine / video consultation session between a doctor and a patient or peer."""
+    SESSION_TYPE = [
+        ('CONSULTATION', 'Patient Consultation'),
+        ('PEER_REVIEW', 'Peer Review'),
+    ]
+    STATUS = [
+        ('SCHEDULED', 'Scheduled'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+        ('NO_SHOW', 'No Show'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    host = models.ForeignKey('doctors.DoctorProfile', on_delete=models.CASCADE, related_name='tele_sessions_hosted')
+    guest_doctor = models.ForeignKey('doctors.DoctorProfile', on_delete=models.SET_NULL, null=True, blank=True, related_name='tele_sessions_guest')  # peer review
+    session_type = models.CharField(max_length=20, choices=SESSION_TYPE, default='CONSULTATION')
+    scheduled_at = models.DateTimeField()
+    duration_minutes = models.IntegerField(default=30)
+    status = models.CharField(max_length=20, choices=STATUS, default='SCHEDULED')
+    meeting_link = models.URLField(null=True, blank=True)  # external video provider URL
+    meeting_id = models.CharField(max_length=255, null=True, blank=True)  # provider session ID
+    notes = models.TextField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'telemedicine_sessions'
+        ordering = ['-scheduled_at']
+        indexes = [models.Index(fields=['host', 'status']), models.Index(fields=['scheduled_at'])]
+
+    def __str__(self):
+        return f"Session {self.id} — {self.session_type} ({self.status})"
+
+
+class HospitalAnalyticsSnapshot(models.Model):
+    """Daily pre-computed analytics snapshot per hospital — avoids expensive live aggregations."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hospital = models.ForeignKey('hospitals.Hospital', on_delete=models.CASCADE, related_name='analytics_snapshots')
+    snapshot_date = models.DateField()
+    total_jobs_active = models.IntegerField(default=0)
+    total_applications = models.IntegerField(default=0)
+    total_hired = models.IntegerField(default=0)
+    total_shifts_filled = models.IntegerField(default=0)
+    total_shifts_open = models.IntegerField(default=0)
+    avg_time_to_hire_days = models.DecimalField(max_digits=6, decimal_places=1, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'hospital_analytics_snapshots'
+        unique_together = ('hospital', 'snapshot_date')
+        ordering = ['-snapshot_date']
+
+    def __str__(self):
+        return f"Analytics {self.hospital_id} @ {self.snapshot_date}"

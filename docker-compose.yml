@@ -18,6 +18,25 @@ services:
       timeout: 5s
       retries: 5
 
+  # PostGIS-enabled Postgres — activate with: docker compose --profile postgis up
+  # Set USE_POSTGIS=true in .env before starting.
+  postgres-postgis:
+    profiles: ["postgis"]
+    image: postgis/postgis:16-3.4-alpine
+    environment:
+      POSTGRES_DB: docconnect_db
+      POSTGRES_USER: docconnect_user
+      POSTGRES_PASSWORD: docconnect_password
+    volumes:
+      - postgres_postgis_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docconnect_user -d docconnect_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7.2-alpine
     ports:
@@ -91,3 +110,4 @@ services:
 
 volumes:
   postgres_data:
+  postgres_postgis_data:

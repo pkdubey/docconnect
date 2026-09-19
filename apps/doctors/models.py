@@ -1,7 +1,15 @@
 import uuid
+from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.search import SearchVectorField
 from django.db import models
+
+
+def _build_location_point_field():
+    if getattr(settings, 'USE_POSTGIS', False):
+        from django.contrib.gis.db.models import PointField
+        return PointField(null=True, blank=True, srid=4326, geography=True)
+    return models.JSONField(null=True, blank=True)
 
 
 class DoctorProfile(models.Model):
@@ -39,6 +47,9 @@ class DoctorProfile(models.Model):
     primary_specialization_id = models.UUIDField(null=True, blank=True)
     clinical_interests = ArrayField(models.UUIDField(), default=list, blank=True)
     professional_location = models.JSONField(default=dict, blank=True)
+    # PostGIS PointField — active when USE_POSTGIS=true in settings (django.contrib.gis installed + PostGIS extension).
+    # Falls back to JSONField (null) when GIS is not enabled; Haversine/JSONB search is used instead.
+    location_point = _build_location_point_field()
     experience_years = models.DecimalField(max_digits=4, decimal_places=1, default=0)
     open_to_opportunities = models.BooleanField(default=False)
     verification_status = models.CharField(
@@ -52,6 +63,7 @@ class DoctorProfile(models.Model):
         max_length=20, choices=CAREER_VISIBILITY, default='VERIFIED_HOSPITALS'
     )
     languages = models.JSONField(default=list, blank=True)          # e.g. ["English", "Hindi"]
+    preferred_language = models.CharField(max_length=10, default='en')  # BCP-47: en, hi, ta, te
     career_preferences = models.JSONField(default=dict, blank=True)  # job_types, locations, etc.
     search_vector = SearchVectorField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)

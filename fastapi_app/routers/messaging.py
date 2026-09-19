@@ -213,17 +213,28 @@ async def mark_conversation_read(conversation_id: str, current_user=Depends(get_
 
 @router.post("/conversations/{conversation_id}/report/", status_code=201, summary="Report a conversation")
 async def report_conversation(conversation_id: str, reason: str = "SPAM", current_user=Depends(get_current_user)):
-    import uuid
     def _report():
-        reports = current_user.metadata.get("submitted_reports", [])
-        reports.append({
-            "id": str(uuid.uuid4()), "target_type": "CONVERSATION",
-            "target_id": conversation_id, "reason": reason, "status": "SUBMITTED",
-        })
-        current_user.metadata["submitted_reports"] = reports
-        current_user.save(update_fields=["metadata"])
+        from apps.core.models import Report
+        from apps.messaging.models import ConversationParticipant
+        if not ConversationParticipant.objects.filter(
+            conversation_id=conversation_id, user=current_user, is_active=True
+        ).exists():
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        Report.objects.create(
+            reporter=current_user,
+            target_type='CONVERSATION',
+            target_id=conversation_id,
+            reason=reason if reason in [
+                'SPAM', 'HARASSMENT', 'PATIENT_PRIVACY_CONCERN',
+                'POTENTIAL_MEDICAL_MISINFORMATION', 'OTHER_POLICY_VIOLATION',
+            ] else 'OTHER_POLICY_VIOLATION',
+            severity='MEDIUM',
+        )
 
-    await sync_to_async(_report, thread_sensitive=True)()
+    try:
+        await sync_to_async(_report, thread_sensitive=True)()
+    except HTTPException:
+        raise
     return {"success": True, "message": "Conversation reported"}
 
 
