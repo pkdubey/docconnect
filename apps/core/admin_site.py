@@ -46,18 +46,39 @@ class DocConnectAdminSite(AdminSite):
             from apps.hospitals.models import Hospital
             from apps.jobs.models import JobPost, JobApplication
             from apps.availability.models import DoctorAvailability
+            from apps.shifts.models import ShiftRequirement
+            from apps.messaging.models import Conversation
+            from apps.notifications.models import Notification
+            from .models import Report, SupportTicket, Community, CMECredit
             extra_context.update({
-                'doctors_count':      DoctorProfile.objects.count(),
-                'hospitals_count':    Hospital.objects.count(),
-                'jobs_count':         JobPost.objects.filter(status='PUBLISHED').count(),
-                'urgent_count':       JobPost.objects.filter(status='PUBLISHED', is_urgent=True).count(),
-                'applications_count': JobApplication.objects.count(),
-                'availability_count': DoctorAvailability.objects.filter(is_active=True).count(),
+                'doctors_count':              DoctorProfile.objects.count(),
+                'verified_doctors_count':     DoctorProfile.objects.filter(verification_status='VERIFIED').count(),
+                'pending_verification':       DoctorProfile.objects.filter(verification_status='PENDING').count(),
+                'hospitals_count':            Hospital.objects.count(),
+                'verified_hospitals_count':   Hospital.objects.filter(verification_status='VERIFIED').count(),
+                'pending_hospital_verification': Hospital.objects.filter(verification_status='PENDING').count(),
+                'jobs_count':                 JobPost.objects.filter(status='PUBLISHED').count(),
+                'urgent_count':               JobPost.objects.filter(status='PUBLISHED', is_urgent=True).count(),
+                'applications_count':         JobApplication.objects.count(),
+                'availability_count':         DoctorAvailability.objects.filter(is_active=True).count(),
+                'open_shifts_count':          ShiftRequirement.objects.filter(status='OPEN').count(),
+                'pending_reports_count':      Report.objects.filter(status='SUBMITTED').count(),
+                'escalated_reports_count':    Report.objects.filter(status='ESCALATED').count(),
+                'open_tickets_count':         SupportTicket.objects.filter(status__in=['OPEN', 'IN_PROGRESS']).count(),
+                'conversations_count':        Conversation.objects.count(),
+                'unread_notifications_count': Notification.objects.filter(is_read=False).count(),
+                'communities_count':          Community.objects.filter(is_active=True).count(),
+                'pending_cme_count':          CMECredit.objects.filter(status='PENDING').count(),
             })
         except Exception:
             extra_context.update({
-                'doctors_count': 0, 'hospitals_count': 0, 'jobs_count': 0,
-                'urgent_count': 0, 'applications_count': 0, 'availability_count': 0,
+                'doctors_count': 0, 'verified_doctors_count': 0, 'pending_verification': 0,
+                'hospitals_count': 0, 'verified_hospitals_count': 0, 'pending_hospital_verification': 0,
+                'jobs_count': 0, 'urgent_count': 0, 'applications_count': 0,
+                'availability_count': 0, 'open_shifts_count': 0,
+                'pending_reports_count': 0, 'escalated_reports_count': 0,
+                'open_tickets_count': 0, 'conversations_count': 0,
+                'unread_notifications_count': 0, 'communities_count': 0, 'pending_cme_count': 0,
             })
         return super().index(request, extra_context)
 

@@ -8,6 +8,16 @@
 {% block extrastyle %}
 {{ block.super }}
 <style>
+  /* Alert banner */
+  .dash-alert-bar {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    background: #fff8e1; border: 1px solid #f59e0b; border-radius: 8px;
+    padding: 12px 18px; margin-bottom: 20px; align-items: center;
+    font-size: 13px; font-weight: 600; color: #92400e;
+  }
+  .dash-alert-bar a { color: #92400e; text-decoration: underline; margin-left: 4px; }
+  .dash-alert-item { display: flex; align-items: center; gap: 6px; }
+  .dash-alert-item::before { content: '⚠️'; font-size: 14px; }
   /* Stats Grid */
   .dash-stats {
     display: grid;
@@ -24,9 +34,32 @@
     align-items: center;
     gap: 16px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-    transition: box-shadow 0.2s;
+    transition: box-shadow 0.2s, transform 0.15s;
+    text-decoration: none !important;
+    color: inherit !important;
+    cursor: pointer !important;
+    -webkit-text-decoration: none !important;
   }
-  .stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .stat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.13); transform: translateY(-2px); }
+  a.stat-card,
+  a.stat-card:link,
+  a.stat-card:visited,
+  a.stat-card:hover,
+  a.stat-card:active {
+    text-decoration: none !important;
+    color: #1a1a1a !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 16px !important;
+    pointer-events: auto !important;
+  }
+  a.stat-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.13) !important;
+    transform: translateY(-2px) !important;
+  }
+  .stat-card.alert { border-left: 4px solid #cc1016; }
+  .stat-card.warn  { border-left: 4px solid #f59e0b; }
+  .stat-card.good  { border-left: 4px solid #057642; }
   .stat-icon {
     width: 48px; height: 48px; border-radius: 12px;
     display: flex; align-items: center; justify-content: center;
@@ -40,6 +73,16 @@
   .stat-icon.teal { background: #e0f7fa; }
   .stat-num { font-size: 28px; font-weight: 800; color: #1a1a1a; line-height: 1; }
   .stat-label { font-size: 12px; color: #666; margin-top: 4px; font-weight: 500; }
+  .stat-sub { font-size: 11px; color: #999; margin-top: 2px; }
+  /* Progress bar */
+  .prog-bar { height: 4px; background: #eee; border-radius: 2px; margin-top: 6px; width: 80px; }
+  .prog-fill { height: 4px; border-radius: 2px; background: #057642; }
+  /* Alert badge on stat */
+  .stat-badge {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    padding: 1px 6px; border-radius: 8px; margin-left: 6px;
+    background: #fce8e6; color: #cc1016; vertical-align: middle;
+  }
 
   /* Section title */
   .dash-section-title {
@@ -128,249 +171,376 @@
 
 {% block content %}
 
+{% url 'admin:doctors_doctorprofile_changelist' as url_doctors %}
+{% url 'admin:hospitals_hospital_changelist' as url_hospitals %}
+{% url 'admin:jobs_jobpost_changelist' as url_jobs %}
+{% url 'admin:jobs_jobapplication_changelist' as url_applications %}
+{% url 'admin:availability_doctoravailability_changelist' as url_availability %}
+{% url 'admin:shifts_shiftrequirement_changelist' as url_shifts %}
+{% url 'admin:core_report_changelist' as url_reports %}
+{% url 'admin:core_supportticket_changelist' as url_tickets %}
+{% url 'admin:messaging_conversation_changelist' as url_conversations %}
+{% url 'admin:core_cmecredit_changelist' as url_cme %}
+{% url 'admin:core_community_changelist' as url_communities %}
+
+{% if pending_verification or pending_hospital_verification or pending_reports_count or escalated_reports_count or open_tickets_count %}
+<div class="dash-alert-bar">
+  <strong>&#9888; Attention Required:</strong>
+  {% if pending_verification %}<span class="dash-alert-item"><a href="{{ url_doctors }}?verification_status__exact=PENDING">{{ pending_verification }} doctor verification pending</a></span>{% endif %}
+  {% if pending_hospital_verification %}<span class="dash-alert-item"><a href="{{ url_hospitals }}?verification_status__exact=PENDING">{{ pending_hospital_verification }} hospital verification pending</a></span>{% endif %}
+  {% if escalated_reports_count %}<span class="dash-alert-item"><a href="{{ url_reports }}?status__exact=ESCALATED">{{ escalated_reports_count }} escalated reports</a></span>{% endif %}
+  {% if pending_reports_count %}<span class="dash-alert-item"><a href="{{ url_reports }}?status__exact=SUBMITTED">{{ pending_reports_count }} reports to review</a></span>{% endif %}
+  {% if open_tickets_count %}<span class="dash-alert-item"><a href="{{ url_tickets }}?status__exact=OPEN">{{ open_tickets_count }} open support tickets</a></span>{% endif %}
+</div>
+{% endif %}
+
 <!-- Stats Row -->
-<div class="dash-stats">
-  <div class="stat-card">
+<div class="dash-stats" id="dash-stats-grid">
+  <div class="stat-card" data-url="{{ url_doctors }}">
     <div class="stat-icon blue">&#128101;</div>
+    <div><div class="stat-num">{{ doctors_count }}</div><div class="stat-label">Total Doctors</div></div>
+  </div>
+  <div class="stat-card good" data-url="{{ url_doctors }}?verification_status__exact=VERIFIED">
+    <div class="stat-icon green">&#9989;</div>
     <div>
-      <div class="stat-num" id="stat-doctors">—</div>
-      <div class="stat-label">Total Doctors</div>
+      <div class="stat-num">{{ verified_doctors_count }}</div>
+      <div class="stat-label">Verified Doctors</div>
+      {% if doctors_count %}
+      <div class="prog-bar"><div class="prog-fill" style="width:{% widthratio verified_doctors_count doctors_count 100 %}%"></div></div>
+      {% endif %}
     </div>
   </div>
-  <div class="stat-card">
+  <div class="stat-card warn" data-url="{{ url_doctors }}?verification_status__exact=PENDING">
+    <div class="stat-icon orange">&#9203;</div>
+    <div>
+      <div class="stat-num">{{ pending_verification }}{% if pending_verification %}<span class="stat-badge">Action needed</span>{% endif %}</div>
+      <div class="stat-label">Pending Verification</div>
+    </div>
+  </div>
+  <div class="stat-card" data-url="{{ url_hospitals }}">
     <div class="stat-icon green">&#127973;</div>
-    <div>
-      <div class="stat-num" id="stat-hospitals">—</div>
-      <div class="stat-label">Hospitals</div>
-    </div>
+    <div><div class="stat-num">{{ hospitals_count }}</div><div class="stat-label">Hospitals</div></div>
   </div>
-  <div class="stat-card">
+  <div class="stat-card" data-url="{{ url_jobs }}?status__exact=PUBLISHED">
     <div class="stat-icon orange">&#128188;</div>
+    <div><div class="stat-num">{{ jobs_count }}</div><div class="stat-label">Active Jobs</div></div>
+  </div>
+  <div class="stat-card alert" data-url="{{ url_jobs }}?status__exact=PUBLISHED&is_urgent__exact=1">
+    <div class="stat-icon red">&#128680;</div>
+    <div><div class="stat-num">{{ urgent_count }}</div><div class="stat-label">Urgent Jobs</div></div>
+  </div>
+  <div class="stat-card" data-url="{{ url_applications }}">
+    <div class="stat-icon purple">&#128203;</div>
+    <div><div class="stat-num">{{ applications_count }}</div><div class="stat-label">Applications</div></div>
+  </div>
+  <div class="stat-card" data-url="{{ url_availability }}?is_active__exact=1">
+    <div class="stat-icon teal">&#128197;</div>
+    <div><div class="stat-num">{{ availability_count }}</div><div class="stat-label">Availabilities</div></div>
+  </div>
+  <div class="stat-card" data-url="{{ url_shifts }}?status__exact=OPEN">
+    <div class="stat-icon teal">&#128338;</div>
+    <div><div class="stat-num">{{ open_shifts_count }}</div><div class="stat-label">Open Shifts</div></div>
+  </div>
+  <div class="stat-card alert" data-url="{{ url_reports }}?status__exact=SUBMITTED">
+    <div class="stat-icon red">&#128276;</div>
     <div>
-      <div class="stat-num" id="stat-jobs">—</div>
-      <div class="stat-label">Active Jobs</div>
+      <div class="stat-num">{{ pending_reports_count }}{% if pending_reports_count %}<span class="stat-badge">Review</span>{% endif %}</div>
+      <div class="stat-label">Pending Reports</div>
     </div>
   </div>
-  <div class="stat-card">
+  <div class="stat-card warn" data-url="{{ url_tickets }}?status__exact=OPEN">
+    <div class="stat-icon orange">&#127881;</div>
+    <div><div class="stat-num">{{ open_tickets_count }}</div><div class="stat-label">Open Tickets</div></div>
+  </div>
+  <div class="stat-card alert" data-url="{{ url_reports }}?status__exact=ESCALATED">
     <div class="stat-icon red">&#128680;</div>
     <div>
-      <div class="stat-num" id="stat-urgent">—</div>
-      <div class="stat-label">Urgent Jobs</div>
+      <div class="stat-num">{{ escalated_reports_count }}{% if escalated_reports_count %}<span class="stat-badge">Urgent</span>{% endif %}</div>
+      <div class="stat-label">Escalated Reports</div>
     </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-icon purple">&#128203;</div>
-    <div>
-      <div class="stat-num" id="stat-applications">—</div>
-      <div class="stat-label">Applications</div>
-    </div>
+  <div class="stat-card warn" data-url="{{ url_hospitals }}?verification_status__exact=PENDING">
+    <div class="stat-icon orange">&#9203;</div>
+    <div><div class="stat-num">{{ pending_hospital_verification }}</div><div class="stat-label">Hospitals Pending</div></div>
   </div>
-  <div class="stat-card">
-    <div class="stat-icon teal">&#128197;</div>
-    <div>
-      <div class="stat-num" id="stat-availability">—</div>
-      <div class="stat-label">Availabilities</div>
-    </div>
+  <div class="stat-card" data-url="{{ url_conversations }}">
+    <div class="stat-icon blue">&#128172;</div>
+    <div><div class="stat-num">{{ conversations_count }}</div><div class="stat-label">Conversations</div></div>
+  </div>
+  <div class="stat-card warn" data-url="{{ url_cme }}?status__exact=PENDING">
+    <div class="stat-icon purple">&#127891;</div>
+    <div><div class="stat-num">{{ pending_cme_count }}</div><div class="stat-label">CME Pending</div></div>
+  </div>
+  <div class="stat-card" data-url="{{ url_communities }}?is_active__exact=1">
+    <div class="stat-icon teal">&#128101;</div>
+    <div><div class="stat-num">{{ communities_count }}</div><div class="stat-label">Communities</div></div>
   </div>
 </div>
 
 <!-- Quick Actions -->
+{% url 'admin:accounts_user_add' as url_user_add %}
+{% url 'admin:core_matchingconfig_changelist' as url_matching %}
 <div class="quick-actions">
-  <a href="{% url 'admin:accounts_user_add' %}" class="quick-btn primary">+ Add User</a>
-  <a href="{% url 'admin:doctors_doctorprofile_changelist' %}" class="quick-btn outline">&#128101; Doctors</a>
-  <a href="{% url 'admin:hospitals_hospital_changelist' %}" class="quick-btn outline">&#127973; Hospitals</a>
-  <a href="{% url 'admin:jobs_jobpost_changelist' %}" class="quick-btn outline">&#128188; Jobs</a>
-  <a href="{% url 'admin:accounts_user_changelist' %}" class="quick-btn outline">&#128100; Users</a>
-  <a href="/" class="quick-btn green">&#127968; View Site</a>
+  {% if url_user_add %}<a href="{{ url_user_add }}" class="quick-btn primary">+ Add User</a>{% endif %}
+  <a href="{{ url_doctors }}?verification_status__exact=PENDING" class="quick-btn outline">&#9203; Doctor Verification</a>
+  <a href="{{ url_hospitals }}?verification_status__exact=PENDING" class="quick-btn outline">&#127973; Hospital Verification</a>
+  <a href="{{ url_reports }}?status__exact=SUBMITTED" class="quick-btn outline">&#128276; Reports</a>
+  <a href="{{ url_tickets }}?status__exact=OPEN" class="quick-btn outline">&#127881; Support</a>
+  <a href="{{ url_reports }}?status__exact=ESCALATED" class="quick-btn outline" style="border-color:#cc1016;color:#cc1016">&#128680; Escalated</a>
+  {% if url_matching %}<a href="{{ url_matching }}" class="quick-btn green">&#9881;&#65039; Matching Config</a>{% endif %}
 </div>
 
 <!-- Module Grid -->
 <div class="dash-grid">
 
   <!-- Accounts -->
+  {% url 'admin:accounts_user_changelist' as url_users %}
+  {% url 'admin:accounts_user_add' as url_user_add %}
+  {% url 'admin:accounts_otpchallenge_changelist' as url_otp %}
+  {% url 'admin:accounts_refreshsession_changelist' as url_sessions %}
+  {% if url_users %}
   <div class="module-card">
     <div class="module-card-header">
       <div class="module-card-title">&#128100; Accounts</div>
-      <a href="{% url 'admin:accounts_user_changelist' %}" class="module-card-link">View all &rarr;</a>
+      <a href="{{ url_users }}" class="module-card-link">View all &rarr;</a>
     </div>
     <div class="module-row">
-      <a href="{% url 'admin:accounts_user_changelist' %}">Users</a>
+      <a href="{{ url_users }}">Users</a>
       <div class="module-row-actions">
-        <a href="{% url 'admin:accounts_user_changelist' %}">List</a>
-        <a href="{% url 'admin:accounts_user_add' %}" class="add">+ Add</a>
+        <a href="{{ url_users }}">List</a>
+        {% if url_user_add %}<a href="{{ url_user_add }}" class="add">+ Add</a>{% endif %}
       </div>
     </div>
+    {% if url_otp %}
     <div class="module-row">
-      <a href="{% url 'admin:accounts_otpchallenge_changelist' %}">OTP Challenges</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:accounts_otpchallenge_changelist' %}">List</a>
-      </div>
+      <a href="{{ url_otp }}">OTP Challenges</a>
+      <div class="module-row-actions"><a href="{{ url_otp }}">List</a></div>
     </div>
+    {% endif %}
+    {% if url_sessions %}
     <div class="module-row">
-      <a href="{% url 'admin:accounts_refreshsession_changelist' %}">Refresh Sessions</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:accounts_refreshsession_changelist' %}">List</a>
-      </div>
+      <a href="{{ url_sessions }}">Refresh Sessions</a>
+      <div class="module-row-actions"><a href="{{ url_sessions }}">List</a></div>
     </div>
+    {% endif %}
   </div>
+  {% endif %}
 
   <!-- Doctors -->
+  {% url 'admin:doctors_doctorprofile_changelist' as url_dp %}
+  {% url 'admin:doctors_doctorprofile_add' as url_dp_add %}
+  {% url 'admin:doctors_doctorregistration_changelist' as url_dreg %}
+  {% url 'admin:doctors_doctorqualification_changelist' as url_dqual %}
+  {% url 'admin:doctors_doctorexperience_changelist' as url_dexp %}
+  {% url 'admin:doctors_doctoraffiliation_changelist' as url_daff %}
+  {% if url_dp %}
   <div class="module-card">
     <div class="module-card-header">
       <div class="module-card-title">&#128101; Doctors</div>
-      <a href="{% url 'admin:doctors_doctorprofile_changelist' %}" class="module-card-link">View all &rarr;</a>
+      <a href="{{ url_dp }}" class="module-card-link">View all &rarr;</a>
     </div>
-    <div class="module-row">
-      <a href="{% url 'admin:doctors_doctorprofile_changelist' %}">Doctor Profiles</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:doctors_doctorprofile_changelist' %}">List</a>
-        <a href="{% url 'admin:doctors_doctorprofile_add' %}" class="add">+ Add</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:doctors_doctorregistration_changelist' %}">Registrations</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:doctors_doctorregistration_changelist' %}">List</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:doctors_doctorqualification_changelist' %}">Qualifications</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:doctors_doctorqualification_changelist' %}">List</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:doctors_doctorexperience_changelist' %}">Experiences</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:doctors_doctorexperience_changelist' %}">List</a>
-      </div>
-    </div>
+    <div class="module-row"><a href="{{ url_dp }}">All Profiles</a><div class="module-row-actions"><a href="{{ url_dp }}">List</a>{% if url_dp_add %}<a href="{{ url_dp_add }}" class="add">+ Add</a>{% endif %}</div></div>
+    <div class="module-row"><a href="{{ url_dp }}?verification_status__exact=PENDING">Pending Verification</a><div class="module-row-actions"><a href="{{ url_dp }}?verification_status__exact=PENDING">List</a></div></div>
+    {% if url_dreg %}<div class="module-row"><a href="{{ url_dreg }}">Registrations</a><div class="module-row-actions"><a href="{{ url_dreg }}">List</a></div></div>{% endif %}
+    {% if url_dqual %}<div class="module-row"><a href="{{ url_dqual }}">Qualifications</a><div class="module-row-actions"><a href="{{ url_dqual }}">List</a></div></div>{% endif %}
+    {% if url_dexp %}<div class="module-row"><a href="{{ url_dexp }}">Experiences</a><div class="module-row-actions"><a href="{{ url_dexp }}">List</a></div></div>{% endif %}
+    {% if url_daff %}<div class="module-row"><a href="{{ url_daff }}">Affiliations</a><div class="module-row-actions"><a href="{{ url_daff }}">List</a></div></div>{% endif %}
   </div>
+  {% endif %}
 
   <!-- Hospitals -->
+  {% url 'admin:hospitals_hospital_changelist' as url_hosp %}
+  {% url 'admin:hospitals_hospital_add' as url_hosp_add %}
+  {% url 'admin:hospitals_hospitalbranch_changelist' as url_hbranch %}
+  {% url 'admin:hospitals_hospitaldepartment_changelist' as url_hdept %}
+  {% url 'admin:hospitals_hospitaluser_changelist' as url_huser %}
+  {% url 'admin:hospitals_hospitalfollow_changelist' as url_hfollow %}
+  {% if url_hosp %}
   <div class="module-card">
     <div class="module-card-header">
       <div class="module-card-title">&#127973; Hospitals</div>
-      <a href="{% url 'admin:hospitals_hospital_changelist' %}" class="module-card-link">View all &rarr;</a>
+      <a href="{{ url_hosp }}" class="module-card-link">View all &rarr;</a>
     </div>
-    <div class="module-row">
-      <a href="{% url 'admin:hospitals_hospital_changelist' %}">Hospitals</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:hospitals_hospital_changelist' %}">List</a>
-        <a href="{% url 'admin:hospitals_hospital_add' %}" class="add">+ Add</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:hospitals_hospitalbranch_changelist' %}">Branches</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:hospitals_hospitalbranch_changelist' %}">List</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:hospitals_hospitaldepartment_changelist' %}">Departments</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:hospitals_hospitaldepartment_changelist' %}">List</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:hospitals_hospitaluser_changelist' %}">Hospital Users</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:hospitals_hospitaluser_changelist' %}">List</a>
-      </div>
-    </div>
+    <div class="module-row"><a href="{{ url_hosp }}">All Hospitals</a><div class="module-row-actions"><a href="{{ url_hosp }}">List</a>{% if url_hosp_add %}<a href="{{ url_hosp_add }}" class="add">+ Add</a>{% endif %}</div></div>
+    <div class="module-row"><a href="{{ url_hosp }}?verification_status__exact=PENDING">Pending Verification</a><div class="module-row-actions"><a href="{{ url_hosp }}?verification_status__exact=PENDING">List</a></div></div>
+    {% if url_hbranch %}<div class="module-row"><a href="{{ url_hbranch }}">Branches</a><div class="module-row-actions"><a href="{{ url_hbranch }}">List</a></div></div>{% endif %}
+    {% if url_hdept %}<div class="module-row"><a href="{{ url_hdept }}">Departments</a><div class="module-row-actions"><a href="{{ url_hdept }}">List</a></div></div>{% endif %}
+    {% if url_huser %}<div class="module-row"><a href="{{ url_huser }}">Hospital Users</a><div class="module-row-actions"><a href="{{ url_huser }}">List</a></div></div>{% endif %}
+    {% if url_hfollow %}<div class="module-row"><a href="{{ url_hfollow }}">Hospital Follows</a><div class="module-row-actions"><a href="{{ url_hfollow }}">List</a></div></div>{% endif %}
   </div>
+  {% endif %}
 
   <!-- Jobs -->
+  {% url 'admin:jobs_jobpost_changelist' as url_jobpost %}
+  {% url 'admin:jobs_jobpost_add' as url_jobpost_add %}
+  {% url 'admin:jobs_jobapplication_changelist' as url_jobapp %}
+  {% url 'admin:jobs_applicationhistory_changelist' as url_apphist %}
+  {% url 'admin:jobs_jobsave_changelist' as url_jobsave %}
+  {% if url_jobpost %}
   <div class="module-card">
     <div class="module-card-header">
       <div class="module-card-title">&#128188; Jobs</div>
-      <a href="{% url 'admin:jobs_jobpost_changelist' %}" class="module-card-link">View all &rarr;</a>
+      <a href="{{ url_jobpost }}" class="module-card-link">View all &rarr;</a>
     </div>
-    <div class="module-row">
-      <a href="{% url 'admin:jobs_jobpost_changelist' %}">Job Posts</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:jobs_jobpost_changelist' %}">List</a>
-        <a href="{% url 'admin:jobs_jobpost_add' %}" class="add">+ Add</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:jobs_jobapplication_changelist' %}">Applications</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:jobs_jobapplication_changelist' %}">List</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:jobs_applicationhistory_changelist' %}">Application History</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:jobs_applicationhistory_changelist' %}">List</a>
-      </div>
-    </div>
+    <div class="module-row"><a href="{{ url_jobpost }}">Job Posts</a><div class="module-row-actions"><a href="{{ url_jobpost }}">List</a>{% if url_jobpost_add %}<a href="{{ url_jobpost_add }}" class="add">+ Add</a>{% endif %}</div></div>
+    {% if url_jobapp %}<div class="module-row"><a href="{{ url_jobapp }}">Applications</a><div class="module-row-actions"><a href="{{ url_jobapp }}">List</a></div></div>{% endif %}
+    {% if url_apphist %}<div class="module-row"><a href="{{ url_apphist }}">Application History</a><div class="module-row-actions"><a href="{{ url_apphist }}">List</a></div></div>{% endif %}
+    {% if url_jobsave %}<div class="module-row"><a href="{{ url_jobsave }}">Saved Jobs</a><div class="module-row-actions"><a href="{{ url_jobsave }}">List</a></div></div>{% endif %}
   </div>
+  {% endif %}
 
   <!-- Availability & Shifts -->
+  {% url 'admin:availability_doctoravailability_changelist' as url_avail %}
+  {% url 'admin:availability_availabilityslot_changelist' as url_aslot %}
+  {% url 'admin:shifts_shiftrequirement_changelist' as url_sreq %}
+  {% url 'admin:shifts_shiftrequest_changelist' as url_sreqst %}
+  {% url 'admin:shifts_shiftstatushistory_changelist' as url_shist %}
+  {% if url_avail or url_sreq %}
   <div class="module-card">
-    <div class="module-card-header">
-      <div class="module-card-title">&#128197; Availability &amp; Shifts</div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:availability_doctoravailability_changelist' %}">Doctor Availabilities</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:availability_doctoravailability_changelist' %}">List</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:availability_availabilityslot_changelist' %}">Availability Slots</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:availability_availabilityslot_changelist' %}">List</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:shifts_shiftrequirement_changelist' %}">Shift Requirements</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:shifts_shiftrequirement_changelist' %}">List</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:shifts_shiftrequest_changelist' %}">Shift Requests</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:shifts_shiftrequest_changelist' %}">List</a>
-      </div>
-    </div>
+    <div class="module-card-header"><div class="module-card-title">&#128197; Availability &amp; Shifts</div></div>
+    {% if url_avail %}<div class="module-row"><a href="{{ url_avail }}">Doctor Availabilities</a><div class="module-row-actions"><a href="{{ url_avail }}">List</a></div></div>{% endif %}
+    {% if url_aslot %}<div class="module-row"><a href="{{ url_aslot }}">Availability Slots</a><div class="module-row-actions"><a href="{{ url_aslot }}">List</a></div></div>{% endif %}
+    {% if url_sreq %}<div class="module-row"><a href="{{ url_sreq }}">Shift Requirements</a><div class="module-row-actions"><a href="{{ url_sreq }}">List</a></div></div>{% endif %}
+    {% if url_sreqst %}<div class="module-row"><a href="{{ url_sreqst }}">Shift Requests</a><div class="module-row-actions"><a href="{{ url_sreqst }}">List</a></div></div>{% endif %}
+    {% if url_shist %}<div class="module-row"><a href="{{ url_shist }}">Shift Status History</a><div class="module-row-actions"><a href="{{ url_shist }}">List</a></div></div>{% endif %}
   </div>
+  {% endif %}
 
-  <!-- Core & Notifications -->
+  <!-- Network & Feed -->
+  {% url 'admin:doctors_connection_changelist' as url_conn %}
+  {% url 'admin:doctors_post_changelist' as url_post %}
+  {% url 'admin:doctors_postcomment_changelist' as url_comment %}
+  {% url 'admin:doctors_follow_changelist' as url_follow %}
+  {% url 'admin:doctors_block_changelist' as url_block %}
+  {% if url_conn or url_post %}
   <div class="module-card">
-    <div class="module-card-header">
-      <div class="module-card-title">&#9881;&#65039; Core &amp; Notifications</div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:core_specialization_changelist' %}">Specializations</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:core_specialization_changelist' %}">List</a>
-        <a href="{% url 'admin:core_specialization_add' %}" class="add">+ Add</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:core_qualification_changelist' %}">Qualifications</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:core_qualification_changelist' %}">List</a>
-        <a href="{% url 'admin:core_qualification_add' %}" class="add">+ Add</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:core_council_changelist' %}">Medical Councils</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:core_council_changelist' %}">List</a>
-        <a href="{% url 'admin:core_council_add' %}" class="add">+ Add</a>
-      </div>
-    </div>
-    <div class="module-row">
-      <a href="{% url 'admin:notifications_notification_changelist' %}">Notifications</a>
-      <div class="module-row-actions">
-        <a href="{% url 'admin:notifications_notification_changelist' %}">List</a>
-      </div>
-    </div>
+    <div class="module-card-header"><div class="module-card-title">&#128279; Network &amp; Feed</div></div>
+    {% if url_conn %}<div class="module-row"><a href="{{ url_conn }}">Connections</a><div class="module-row-actions"><a href="{{ url_conn }}">List</a></div></div>{% endif %}
+    {% if url_post %}<div class="module-row"><a href="{{ url_post }}">Posts</a><div class="module-row-actions"><a href="{{ url_post }}">List</a></div></div>{% endif %}
+    {% if url_comment %}<div class="module-row"><a href="{{ url_comment }}">Comments</a><div class="module-row-actions"><a href="{{ url_comment }}">List</a></div></div>{% endif %}
+    {% if url_follow %}<div class="module-row"><a href="{{ url_follow }}">Follows</a><div class="module-row-actions"><a href="{{ url_follow }}">List</a></div></div>{% endif %}
+    {% if url_block %}<div class="module-row"><a href="{{ url_block }}">Blocks</a><div class="module-row-actions"><a href="{{ url_block }}">List</a></div></div>{% endif %}
   </div>
+  {% endif %}
+
+  <!-- Messaging -->
+  {% url 'admin:messaging_conversation_changelist' as url_conv %}
+  {% url 'admin:messaging_conversationparticipant_changelist' as url_convp %}
+  {% url 'admin:messaging_message_changelist' as url_msg %}
+  {% if url_conv %}
+  <div class="module-card">
+    <div class="module-card-header"><div class="module-card-title">&#128172; Messaging</div><a href="{{ url_conv }}" class="module-card-link">View all &rarr;</a></div>
+    <div class="module-row"><a href="{{ url_conv }}">Conversations</a><div class="module-row-actions"><a href="{{ url_conv }}">List</a></div></div>
+    {% if url_convp %}<div class="module-row"><a href="{{ url_convp }}">Participants</a><div class="module-row-actions"><a href="{{ url_convp }}">List</a></div></div>{% endif %}
+    {% if url_msg %}<div class="module-row"><a href="{{ url_msg }}">Messages</a><div class="module-row-actions"><a href="{{ url_msg }}">List</a></div></div>{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Notifications -->
+  {% url 'admin:notifications_notification_changelist' as url_notif %}
+  {% url 'admin:notifications_devicetoken_changelist' as url_devtok %}
+  {% url 'admin:notifications_notificationpreference_changelist' as url_notifpref %}
+  {% if url_notif %}
+  <div class="module-card">
+    <div class="module-card-header"><div class="module-card-title">&#128276; Notifications</div><a href="{{ url_notif }}" class="module-card-link">View all &rarr;</a></div>
+    <div class="module-row"><a href="{{ url_notif }}">All Notifications</a><div class="module-row-actions"><a href="{{ url_notif }}">List</a></div></div>
+    <div class="module-row"><a href="{{ url_notif }}?is_read__exact=0">Unread</a><div class="module-row-actions"><a href="{{ url_notif }}?is_read__exact=0">List</a></div></div>
+    {% if url_devtok %}<div class="module-row"><a href="{{ url_devtok }}">Device Tokens</a><div class="module-row-actions"><a href="{{ url_devtok }}">List</a></div></div>{% endif %}
+    {% if url_notifpref %}<div class="module-row"><a href="{{ url_notifpref }}">Preferences</a><div class="module-row-actions"><a href="{{ url_notifpref }}">List</a></div></div>{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Moderation & Reports -->
+  {% url 'admin:core_report_changelist' as url_rep %}
+  {% url 'admin:core_auditlog_changelist' as url_audit %}
+  {% if url_rep %}
+  <div class="module-card">
+    <div class="module-card-header"><div class="module-card-title">&#128276; Moderation &amp; Reports</div><a href="{{ url_rep }}" class="module-card-link">View all &rarr;</a></div>
+    <div class="module-row"><a href="{{ url_rep }}?status__exact=SUBMITTED">Submitted Reports</a><div class="module-row-actions"><a href="{{ url_rep }}?status__exact=SUBMITTED">List</a></div></div>
+    <div class="module-row"><a href="{{ url_rep }}?status__exact=UNDER_REVIEW">Under Review</a><div class="module-row-actions"><a href="{{ url_rep }}?status__exact=UNDER_REVIEW">List</a></div></div>
+    <div class="module-row"><a href="{{ url_rep }}?severity__exact=CRITICAL">Critical Reports</a><div class="module-row-actions"><a href="{{ url_rep }}?severity__exact=CRITICAL">List</a></div></div>
+    {% if url_audit %}<div class="module-row"><a href="{{ url_audit }}">Audit Log</a><div class="module-row-actions"><a href="{{ url_audit }}">List</a></div></div>{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Support Tickets -->
+  {% url 'admin:core_supportticket_changelist' as url_tix %}
+  {% if url_tix %}
+  <div class="module-card">
+    <div class="module-card-header"><div class="module-card-title">&#127881; Support Tickets</div><a href="{{ url_tix }}" class="module-card-link">View all &rarr;</a></div>
+    <div class="module-row"><a href="{{ url_tix }}?status__exact=OPEN">Open Tickets</a><div class="module-row-actions"><a href="{{ url_tix }}?status__exact=OPEN">List</a></div></div>
+    <div class="module-row"><a href="{{ url_tix }}?status__exact=IN_PROGRESS">In Progress</a><div class="module-row-actions"><a href="{{ url_tix }}?status__exact=IN_PROGRESS">List</a></div></div>
+    <div class="module-row"><a href="{{ url_tix }}?category__exact=VERIFICATION">Verification Issues</a><div class="module-row-actions"><a href="{{ url_tix }}?category__exact=VERIFICATION">List</a></div></div>
+  </div>
+  {% endif %}
+
+  <!-- Communities -->
+  {% url 'admin:core_community_changelist' as url_comm %}
+  {% url 'admin:core_community_add' as url_comm_add %}
+  {% url 'admin:core_communitymember_changelist' as url_commm %}
+  {% if url_comm %}
+  <div class="module-card">
+    <div class="module-card-header"><div class="module-card-title">&#128101; Communities</div><a href="{{ url_comm }}" class="module-card-link">View all &rarr;</a></div>
+    <div class="module-row"><a href="{{ url_comm }}">Communities</a><div class="module-row-actions"><a href="{{ url_comm }}">List</a>{% if url_comm_add %}<a href="{{ url_comm_add }}" class="add">+ Add</a>{% endif %}</div></div>
+    {% if url_commm %}<div class="module-row"><a href="{{ url_commm }}">Members</a><div class="module-row-actions"><a href="{{ url_commm }}">List</a></div></div>{% endif %}
+    {% if url_commm %}<div class="module-row"><a href="{{ url_commm }}?is_moderator__exact=1">Moderators</a><div class="module-row-actions"><a href="{{ url_commm }}?is_moderator__exact=1">List</a></div></div>{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Billing -->
+  {% url 'admin:core_plan_changelist' as url_plan %}
+  {% url 'admin:core_plan_add' as url_plan_add %}
+  {% url 'admin:core_subscription_changelist' as url_sub %}
+  {% url 'admin:core_invoice_changelist' as url_inv %}
+  {% url 'admin:core_payment_changelist' as url_pay %}
+  {% if url_plan %}
+  <div class="module-card">
+    <div class="module-card-header"><div class="module-card-title">&#128176; Billing</div></div>
+    <div class="module-row"><a href="{{ url_plan }}">Plans</a><div class="module-row-actions"><a href="{{ url_plan }}">List</a>{% if url_plan_add %}<a href="{{ url_plan_add }}" class="add">+ Add</a>{% endif %}</div></div>
+    {% if url_sub %}<div class="module-row"><a href="{{ url_sub }}">Subscriptions</a><div class="module-row-actions"><a href="{{ url_sub }}">List</a></div></div>{% endif %}
+    {% if url_inv %}<div class="module-row"><a href="{{ url_inv }}">Invoices</a><div class="module-row-actions"><a href="{{ url_inv }}">List</a></div></div>{% endif %}
+    {% if url_pay %}<div class="module-row"><a href="{{ url_pay }}">Payments</a><div class="module-row-actions"><a href="{{ url_pay }}">List</a></div></div>{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- CME & Phase 3 -->
+  {% url 'admin:core_cmeevent_changelist' as url_cmeev %}
+  {% url 'admin:core_cmeevent_add' as url_cmeev_add %}
+  {% url 'admin:core_cmecredit_changelist' as url_cmecr %}
+  {% url 'admin:core_endorsement_changelist' as url_endorse %}
+  {% url 'admin:core_secondopinionrequest_changelist' as url_secop %}
+  {% url 'admin:core_telemedicinesession_changelist' as url_tele %}
+  {% if url_cmeev or url_cmecr %}
+  <div class="module-card">
+    <div class="module-card-header"><div class="module-card-title">&#127891; CME &amp; Phase 3</div></div>
+    {% if url_cmeev %}<div class="module-row"><a href="{{ url_cmeev }}">CME Events</a><div class="module-row-actions"><a href="{{ url_cmeev }}">List</a>{% if url_cmeev_add %}<a href="{{ url_cmeev_add }}" class="add">+ Add</a>{% endif %}</div></div>{% endif %}
+    {% if url_cmecr %}<div class="module-row"><a href="{{ url_cmecr }}">CME Credits</a><div class="module-row-actions"><a href="{{ url_cmecr }}">List</a></div></div>{% endif %}
+    {% if url_endorse %}<div class="module-row"><a href="{{ url_endorse }}">Endorsements</a><div class="module-row-actions"><a href="{{ url_endorse }}">List</a></div></div>{% endif %}
+    {% if url_secop %}<div class="module-row"><a href="{{ url_secop }}">Second Opinions</a><div class="module-row-actions"><a href="{{ url_secop }}">List</a></div></div>{% endif %}
+    {% if url_tele %}<div class="module-row"><a href="{{ url_tele }}">Telemedicine Sessions</a><div class="module-row-actions"><a href="{{ url_tele }}">List</a></div></div>{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Settings -->
+  {% url 'admin:core_matchingconfig_changelist' as url_mconf %}
+  {% url 'admin:core_matchingconfig_add' as url_mconf_add %}
+  {% url 'admin:core_specialization_changelist' as url_spec %}
+  {% url 'admin:core_specialization_add' as url_spec_add %}
+  {% url 'admin:core_qualification_changelist' as url_qual %}
+  {% url 'admin:core_qualification_add' as url_qual_add %}
+  {% url 'admin:core_council_changelist' as url_council %}
+  {% url 'admin:core_council_add' as url_council_add %}
+  {% url 'admin:core_hospitalanalyticssnapshot_changelist' as url_analytics %}
+  {% if url_mconf or url_spec %}
+  <div class="module-card">
+    <div class="module-card-header"><div class="module-card-title">&#9881;&#65039; Settings &amp; Config</div></div>
+    {% if url_mconf %}<div class="module-row"><a href="{{ url_mconf }}">Matching Config</a><div class="module-row-actions"><a href="{{ url_mconf }}">List</a>{% if url_mconf_add %}<a href="{{ url_mconf_add }}" class="add">+ Add</a>{% endif %}</div></div>{% endif %}
+    {% if url_spec %}<div class="module-row"><a href="{{ url_spec }}">Specializations</a><div class="module-row-actions"><a href="{{ url_spec }}">List</a>{% if url_spec_add %}<a href="{{ url_spec_add }}" class="add">+ Add</a>{% endif %}</div></div>{% endif %}
+    {% if url_qual %}<div class="module-row"><a href="{{ url_qual }}">Qualifications</a><div class="module-row-actions"><a href="{{ url_qual }}">List</a>{% if url_qual_add %}<a href="{{ url_qual_add }}" class="add">+ Add</a>{% endif %}</div></div>{% endif %}
+    {% if url_council %}<div class="module-row"><a href="{{ url_council }}">Medical Councils</a><div class="module-row-actions"><a href="{{ url_council }}">List</a>{% if url_council_add %}<a href="{{ url_council_add }}" class="add">+ Add</a>{% endif %}</div></div>{% endif %}
+    {% if url_analytics %}<div class="module-row"><a href="{{ url_analytics }}">Analytics Snapshots</a><div class="module-row-actions"><a href="{{ url_analytics }}">List</a></div></div>{% endif %}
+  </div>
+  {% endif %}
 
 </div>
 
@@ -406,30 +576,16 @@
   {% endif %}
 </div>
 
+
 <script>
-// Fetch stats via Django admin changelist counts
-(function() {
-  const urls = [
-    { id: 'stat-doctors',      url: '{% url "admin:doctors_doctorprofile_changelist" %}' },
-    { id: 'stat-hospitals',    url: '{% url "admin:hospitals_hospital_changelist" %}' },
-    { id: 'stat-jobs',         url: '{% url "admin:jobs_jobpost_changelist" %}?status__exact=PUBLISHED' },
-    { id: 'stat-urgent',       url: '{% url "admin:jobs_jobpost_changelist" %}?is_urgent__exact=1' },
-    { id: 'stat-applications', url: '{% url "admin:jobs_jobapplication_changelist" %}' },
-    { id: 'stat-availability', url: '{% url "admin:availability_doctoravailability_changelist" %}?is_active__exact=1' },
-  ];
-  // Use Django ORM via inline script data
-  const stats = {
-    'stat-doctors':      {{ doctors_count }},
-    'stat-hospitals':    {{ hospitals_count }},
-    'stat-jobs':         {{ jobs_count }},
-    'stat-urgent':       {{ urgent_count }},
-    'stat-applications': {{ applications_count }},
-    'stat-availability': {{ availability_count }},
-  };
-  Object.entries(stats).forEach(([id, val]) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.stat-card[data-url]').forEach(function(card) {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', function() {
+      window.location.href = this.getAttribute('data-url');
+    });
   });
-})();
+});
 </script>
+
 {% endblock %}

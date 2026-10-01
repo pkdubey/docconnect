@@ -65,12 +65,19 @@ document.addEventListener('click',function(e){
 {% block extrahead %}
 {{ block.super }}
 <style>
-html { height: auto !important; overflow-y: auto !important; }
-body { height: auto !important; overflow-y: auto !important; }
-#container { height: auto !important; min-height: 100vh !important; overflow: visible !important; }
-#container > .main { overflow: visible !important; }
-.main > .content { overflow: visible !important; }
-.sticky { overflow-y: auto !important; padding-bottom: 80px !important; box-sizing: border-box !important; }
+* { box-sizing: border-box; }
+html { height: 100%; overflow-x: hidden; }
+body { min-height: 100%; overflow-x: hidden; }
+#container { display: flex; flex-direction: column; min-height: 100vh; overflow-x: hidden; }
+#main { flex: 1; display: flex; flex-direction: row; align-items: flex-start; min-width: 0; overflow: hidden; }
+/* Content area scrolls independently */
+#content-start { flex: 1; min-width: 0; overflow-x: auto; overflow-y: auto; }
+#content { min-width: 0; overflow-x: auto; }
+#content-main { min-width: 0; overflow-x: auto; }
+/* Sidebar sticky scroll */
+.sticky { position: sticky !important; top: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; max-height: 100vh !important; padding-bottom: 40px !important; }
+/* Tables scroll on small screens */
+.results, #changelist-form { overflow-x: auto; }
 </style>
 {% endblock %}
 
@@ -105,8 +112,28 @@ body { height: auto !important; overflow-y: auto !important; }
   #content { padding: 24px !important; background: var(--bg) !important; }
   #content h1 { font-size: 22px !important; font-weight: 700 !important; color: var(--text) !important; margin-bottom: 20px !important; }
 
-  /* ── LEFT NAV SIDEBAR — minimal overrides only ── */
-  #toggle-nav-sidebar { border-right: 1px solid var(--border) !important; }
+  /* ── LEFT NAV SIDEBAR ── */
+  #toggle-nav-sidebar {
+    border-right: 1px solid var(--border) !important;
+    width: 24px !important;
+    min-width: 24px !important;
+    flex-shrink: 0 !important;
+    cursor: pointer !important;
+    background: var(--white) !important;
+    z-index: 10 !important;
+    align-self: stretch !important;
+  }
+  #nav-sidebar {
+    width: 240px !important;
+    min-width: 240px !important;
+    max-width: 240px !important;
+    background: var(--white) !important;
+    border-right: 1px solid var(--border) !important;
+    flex-shrink: 0 !important;
+    overflow-x: hidden !important;
+  }
+  #main { align-items: flex-start !important; }
+  #content-related { display: none !important; }
   #nav-filter:focus { border-color: var(--blue) !important; outline: none !important; }
 
   /* ── Module / App cards ── */
@@ -143,14 +170,15 @@ body { height: auto !important; overflow-y: auto !important; }
   table.model-jobpost td a { color: var(--blue) !important; font-weight: 600 !important; }
 
   /* ── Change list table ── */
-  #changelist { background: var(--white) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important; }
-  #changelist table { border: none !important; box-shadow: none !important; }
-  #changelist table thead th { background: #f8f9fa !important; color: var(--muted) !important; font-size: 11px !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.6px !important; padding: 10px 16px !important; border-bottom: 2px solid var(--border) !important; }
+  #changelist { background: var(--white) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important; overflow: hidden !important; }
+  #changelist-form { overflow-x: auto !important; }
+  #changelist table { border: none !important; box-shadow: none !important; min-width: 600px !important; width: 100% !important; }
+  #changelist table thead th { background: #f8f9fa !important; color: var(--muted) !important; font-size: 11px !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.6px !important; padding: 10px 16px !important; border-bottom: 2px solid var(--border) !important; white-space: nowrap !important; }
   #changelist table thead th a { color: var(--muted) !important; }
   #changelist table tbody tr:hover { background: #f8f9fa !important; }
-  #changelist table tbody td { padding: 12px 16px !important; font-size: 13px !important; color: var(--text) !important; border-bottom: 1px solid #f0f0f0 !important; }
+  #changelist table tbody td { padding: 10px 16px !important; font-size: 13px !important; color: var(--text) !important; border-bottom: 1px solid #f0f0f0 !important; }
   #changelist table tbody td a { color: var(--blue) !important; font-weight: 600 !important; }
-  #changelist-filter { background: var(--white) !important; border-left: 1px solid var(--border) !important; padding: 16px !important; }
+  #changelist-filter { background: var(--white) !important; border-left: 1px solid var(--border) !important; padding: 16px !important; min-width: 160px !important; }
   #changelist-filter h2 { font-size: 11px !important; font-weight: 700 !important; text-transform: uppercase !important; color: var(--muted) !important; letter-spacing: 0.6px !important; margin-bottom: 12px !important; }
   #changelist-filter h3 { font-size: 13px !important; font-weight: 700 !important; color: var(--text) !important; margin: 16px 0 8px !important; }
   #changelist-filter li { font-size: 13px !important; padding: 3px 0 !important; color: var(--text) !important; }
@@ -227,9 +255,17 @@ body { height: auto !important; overflow-y: auto !important; }
   /* ── Select2 / related ── */
   .related-widget-wrapper { color: var(--text) !important; }
 
+  @media (max-width: 1024px) {
+    #nav-sidebar { width: 200px !important; min-width: 200px !important; max-width: 200px !important; }
+  }
   @media (max-width: 767px) {
-    #header { padding: 0 16px !important; }
-    #content { padding: 16px !important; }
+    #header { padding: 0 12px !important; }
+    #content { padding: 12px !important; }
+    #searchbar { width: 100% !important; max-width: 200px !important; }
+    .dash-grid { grid-template-columns: 1fr !important; }
+    .dash-stats { grid-template-columns: repeat(2, 1fr) !important; }
+    #changelist table { font-size: 12px !important; }
+    #changelist table tbody td, #changelist table thead th { padding: 8px 10px !important; }
   }
 </style>
 {% endblock %}

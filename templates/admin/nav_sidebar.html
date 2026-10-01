@@ -1,0 +1,344 @@
+{% load i18n %}
+<button class="sticky toggle-nav-sidebar" id="toggle-nav-sidebar" aria-label="{% translate 'Toggle navigation' %}"></button>
+<nav class="sticky" id="nav-sidebar" aria-label="{% translate 'Sidebar' %}">
+
+<style>
+#nav-sidebar { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.nav-section-header {
+  padding: 16px 16px 4px;
+  font-size: 10px; font-weight: 700; color: #aaa;
+  text-transform: uppercase; letter-spacing: 1px;
+  display: flex; align-items: center; gap: 6px;
+}
+.nav-link {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 16px; font-size: 13px; color: #374151;
+  text-decoration: none; border-radius: 0;
+  transition: background 0.12s, color 0.12s;
+  border-left: 3px solid transparent;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nav-link:hover { background: #f0f4ff; color: #0a66c2; border-left-color: #c7d9f5; }
+.nav-link.active { background: #e8f0fe; color: #0a66c2; font-weight: 600; border-left-color: #0a66c2; }
+.nav-link.sub { padding-left: 38px; font-size: 12px; color: #6b7280; }
+.nav-link.sub:hover { color: #0a66c2; }
+.nav-link.urgent { color: #dc2626; }
+.nav-link.urgent:hover { background: #fef2f2; color: #dc2626; border-left-color: #fca5a5; }
+.nav-link.warn { color: #d97706; }
+.nav-link.warn:hover { background: #fffbeb; color: #d97706; border-left-color: #fcd34d; }
+.nav-link.success { color: #059669; }
+.nav-link.success:hover { background: #ecfdf5; color: #059669; border-left-color: #6ee7b7; }
+.nav-divider { height: 1px; background: #f3f4f6; margin: 4px 0; }
+.nav-icon { font-size: 15px; flex-shrink: 0; width: 18px; text-align: center; }
+#nav-filter {
+  width: 100%; padding: 8px 12px;
+  border: 1px solid #e5e7eb; border-radius: 6px;
+  font-size: 13px; outline: none; color: #374151;
+  background: #f9fafb; transition: border-color 0.15s, box-shadow 0.15s;
+}
+#nav-filter:focus { border-color: #0a66c2; background: #fff; box-shadow: 0 0 0 3px rgba(10,102,194,0.1); }
+</style>
+
+  <div style="padding:10px 12px;border-bottom:1px solid #f3f4f6;background:#fff">
+    <input type="search" id="nav-filter"
+           placeholder="{% translate 'Filter...' %}"
+           aria-label="{% translate 'Filter navigation items' %}"/>
+  </div>
+
+  <div id="nav-sidebar-content" style="padding-bottom:40px">
+
+    {% url 'admin:index' as url_dash %}
+    {% if url_dash %}
+    <a href="{{ url_dash }}" class="nav-link" style="font-weight:600;padding:10px 16px;margin-top:4px">
+      <span class="nav-icon">🏠</span> Dashboard
+    </a>
+    {% endif %}
+
+    <div class="nav-divider"></div>
+
+    <!-- ── Identity & Verification ── -->
+    {% url 'admin:accounts_user_changelist' as u %}
+    {% url 'admin:doctors_doctorprofile_changelist' as dp %}
+    {% url 'admin:doctors_doctorregistration_changelist' as dr %}
+    {% url 'admin:hospitals_hospital_changelist' as hh %}
+    {% if u or dp or hh %}
+    <div class="nav-section">
+      <div class="nav-section-header">🔐 Identity & Verification</div>
+      {% if u %}<a href="{{ u }}" class="nav-link"><span class="nav-icon">👤</span> Users</a>{% endif %}
+      {% if dp %}<a href="{{ dp }}" class="nav-link"><span class="nav-icon">👨‍⚕️</span> Doctor Profiles</a>{% endif %}
+      {% if dp %}<a href="{{ dp }}?verification_status__exact=PENDING" class="nav-link sub warn"><span class="nav-icon">⏳</span> Pending Verification</a>{% endif %}
+      {% if dp %}<a href="{{ dp }}?verification_status__exact=REJECTED" class="nav-link sub urgent"><span class="nav-icon">❌</span> Rejected</a>{% endif %}
+      {% if dr %}<a href="{{ dr }}" class="nav-link sub"><span class="nav-icon">📋</span> Registrations</a>{% endif %}
+      {% if hh %}<a href="{{ hh }}" class="nav-link"><span class="nav-icon">🏥</span> Hospitals</a>{% endif %}
+      {% if hh %}<a href="{{ hh }}?verification_status__exact=PENDING" class="nav-link sub warn"><span class="nav-icon">⏳</span> Hospital Pending</a>{% endif %}
+      {% if hh %}<a href="{{ hh }}?verification_status__exact=REJECTED" class="nav-link sub urgent"><span class="nav-icon">❌</span> Hospital Rejected</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Doctor Profile Details ── -->
+    {% url 'admin:doctors_doctorqualification_changelist' as dqual %}
+    {% url 'admin:doctors_doctorexperience_changelist' as dexp %}
+    {% url 'admin:doctors_doctoraffiliation_changelist' as daff %}
+    {% if dqual or dexp or daff %}
+    <div class="nav-section">
+      <div class="nav-section-header">🩺 Doctor Profile Details</div>
+      {% if dqual %}<a href="{{ dqual }}" class="nav-link"><span class="nav-icon">🎓</span> Qualifications</a>{% endif %}
+      {% if dexp %}<a href="{{ dexp }}" class="nav-link"><span class="nav-icon">💼</span> Experiences</a>{% endif %}
+      {% if daff %}<a href="{{ daff }}" class="nav-link"><span class="nav-icon">🏥</span> Affiliations</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Hospital Structure ── -->
+    {% url 'admin:hospitals_hospitalbranch_changelist' as hbranch %}
+    {% url 'admin:hospitals_hospitaldepartment_changelist' as hdept %}
+    {% url 'admin:hospitals_hospitaluser_changelist' as huser %}
+    {% url 'admin:hospitals_hospitalfollow_changelist' as hfollow %}
+    {% if hbranch or hdept or huser %}
+    <div class="nav-section">
+      <div class="nav-section-header">🏢 Hospital Structure</div>
+      {% if hbranch %}<a href="{{ hbranch }}" class="nav-link"><span class="nav-icon">🏢</span> Branches</a>{% endif %}
+      {% if hdept %}<a href="{{ hdept }}" class="nav-link"><span class="nav-icon">🏗️</span> Departments</a>{% endif %}
+      {% if huser %}<a href="{{ huser }}" class="nav-link"><span class="nav-icon">👔</span> Hospital Users</a>{% endif %}
+      {% if hfollow %}<a href="{{ hfollow }}" class="nav-link"><span class="nav-icon">⭐</span> Hospital Follows</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Career Marketplace ── -->
+    {% url 'admin:jobs_jobpost_changelist' as jobs %}
+    {% url 'admin:jobs_jobapplication_changelist' as japps %}
+    {% url 'admin:jobs_applicationhistory_changelist' as japphist %}
+    {% url 'admin:jobs_jobsave_changelist' as jsave %}
+    {% if jobs or japps %}
+    <div class="nav-section">
+      <div class="nav-section-header">💼 Career Marketplace</div>
+      {% if jobs %}<a href="{{ jobs }}" class="nav-link"><span class="nav-icon">💼</span> Job Posts</a>{% endif %}
+      {% if jobs %}<a href="{{ jobs }}?status__exact=PUBLISHED" class="nav-link sub success"><span class="nav-icon">🟢</span> Published Jobs</a>{% endif %}
+      {% if jobs %}<a href="{{ jobs }}?status__exact=PUBLISHED&is_urgent__exact=1" class="nav-link sub urgent"><span class="nav-icon">🚨</span> Urgent Jobs</a>{% endif %}
+      {% if jobs %}<a href="{{ jobs }}?status__exact=DRAFT" class="nav-link sub"><span class="nav-icon">📝</span> Draft Jobs</a>{% endif %}
+      {% if japps %}<a href="{{ japps }}" class="nav-link"><span class="nav-icon">📋</span> Applications</a>{% endif %}
+      {% if japps %}<a href="{{ japps }}?status__exact=APPLIED" class="nav-link sub"><span class="nav-icon">📥</span> New Applications</a>{% endif %}
+      {% if japps %}<a href="{{ japps }}?status__exact=INTERVIEW" class="nav-link sub warn"><span class="nav-icon">🎤</span> Interviews</a>{% endif %}
+      {% if japps %}<a href="{{ japps }}?status__exact=OFFERED" class="nav-link sub success"><span class="nav-icon">📨</span> Offers</a>{% endif %}
+      {% if japphist %}<a href="{{ japphist }}" class="nav-link sub"><span class="nav-icon">📜</span> Application History</a>{% endif %}
+      {% if jsave %}<a href="{{ jsave }}" class="nav-link sub"><span class="nav-icon">🔖</span> Saved Jobs</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Availability & Shifts ── -->
+    {% url 'admin:availability_doctoravailability_changelist' as avail %}
+    {% url 'admin:availability_availabilityslot_changelist' as slots %}
+    {% url 'admin:shifts_shiftrequirement_changelist' as sreq %}
+    {% url 'admin:shifts_shiftrequest_changelist' as sreqst %}
+    {% url 'admin:shifts_shiftstatushistory_changelist' as shist %}
+    {% if avail or sreq %}
+    <div class="nav-section">
+      <div class="nav-section-header">📅 Availability & Shifts</div>
+      {% if avail %}<a href="{{ avail }}" class="nav-link"><span class="nav-icon">📅</span> Doctor Availability</a>{% endif %}
+      {% if avail %}<a href="{{ avail }}?is_active__exact=1" class="nav-link sub success"><span class="nav-icon">🟢</span> Active Availability</a>{% endif %}
+      {% if slots %}<a href="{{ slots }}" class="nav-link sub"><span class="nav-icon">🕒</span> Availability Slots</a>{% endif %}
+      {% if sreq %}<a href="{{ sreq }}" class="nav-link"><span class="nav-icon">📌</span> Shift Requirements</a>{% endif %}
+      {% if sreq %}<a href="{{ sreq }}?status__exact=OPEN" class="nav-link sub success"><span class="nav-icon">🟢</span> Open Requirements</a>{% endif %}
+      {% if sreq %}<a href="{{ sreq }}?urgency__exact=IMMEDIATE" class="nav-link sub urgent"><span class="nav-icon">🔴</span> Immediate Urgency</a>{% endif %}
+      {% if sreqst %}<a href="{{ sreqst }}" class="nav-link"><span class="nav-icon">🔄</span> Shift Requests</a>{% endif %}
+      {% if sreqst %}<a href="{{ sreqst }}?status__exact=ACCEPTED_BY_DOCTOR" class="nav-link sub warn"><span class="nav-icon">⏳</span> Awaiting Confirmation</a>{% endif %}
+      {% if shist %}<a href="{{ shist }}" class="nav-link sub"><span class="nav-icon">📜</span> Shift Status History</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Professional Network ── -->
+    {% url 'admin:doctors_connection_changelist' as conn %}
+    {% url 'admin:doctors_post_changelist' as posts %}
+    {% url 'admin:doctors_postcomment_changelist' as comments %}
+    {% url 'admin:doctors_follow_changelist' as follows %}
+    {% url 'admin:doctors_block_changelist' as blocks %}
+    {% if conn or posts %}
+    <div class="nav-section">
+      <div class="nav-section-header">🌐 Professional Network</div>
+      {% if conn %}<a href="{{ conn }}" class="nav-link"><span class="nav-icon">🔗</span> Connections</a>{% endif %}
+      {% if conn %}<a href="{{ conn }}?status__exact=PENDING" class="nav-link sub"><span class="nav-icon">⏳</span> Pending Requests</a>{% endif %}
+      {% if posts %}<a href="{{ posts }}" class="nav-link"><span class="nav-icon">📝</span> Posts</a>{% endif %}
+      {% if comments %}<a href="{{ comments }}" class="nav-link"><span class="nav-icon">💬</span> Comments</a>{% endif %}
+      {% if follows %}<a href="{{ follows }}" class="nav-link"><span class="nav-icon">➕</span> Follows</a>{% endif %}
+      {% if blocks %}<a href="{{ blocks }}" class="nav-link"><span class="nav-icon">🚫</span> Blocks</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Communities ── -->
+    {% url 'admin:core_community_changelist' as comms %}
+    {% url 'admin:core_communitymember_changelist' as commm %}
+    {% if comms %}
+    <div class="nav-section">
+      <div class="nav-section-header">👥 Communities</div>
+      {% if comms %}<a href="{{ comms }}" class="nav-link"><span class="nav-icon">👥</span> All Communities</a>{% endif %}
+      {% if comms %}<a href="{{ comms }}?is_active__exact=1" class="nav-link sub success"><span class="nav-icon">🟢</span> Active</a>{% endif %}
+      {% if comms %}<a href="{{ comms }}?is_active__exact=0" class="nav-link sub"><span class="nav-icon">📦</span> Archived</a>{% endif %}
+      {% if commm %}<a href="{{ commm }}" class="nav-link sub"><span class="nav-icon">👤</span> Members</a>{% endif %}
+      {% if commm %}<a href="{{ commm }}?is_moderator__exact=1" class="nav-link sub warn"><span class="nav-icon">🛡️</span> Moderators</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Messaging & Notifications ── -->
+    {% url 'admin:messaging_conversation_changelist' as convs %}
+    {% url 'admin:messaging_conversationparticipant_changelist' as convp %}
+    {% url 'admin:messaging_message_changelist' as msgs %}
+    {% url 'admin:notifications_notification_changelist' as notifs %}
+    {% url 'admin:notifications_devicetoken_changelist' as devtok %}
+    {% url 'admin:notifications_notificationpreference_changelist' as notifpref %}
+    {% if convs or notifs %}
+    <div class="nav-section">
+      <div class="nav-section-header">💬 Messaging & Notifications</div>
+      {% if convs %}<a href="{{ convs }}" class="nav-link"><span class="nav-icon">💬</span> Conversations</a>{% endif %}
+      {% if convp %}<a href="{{ convp }}" class="nav-link sub"><span class="nav-icon">👥</span> Participants</a>{% endif %}
+      {% if msgs %}<a href="{{ msgs }}" class="nav-link sub"><span class="nav-icon">✉️</span> Messages</a>{% endif %}
+      {% if notifs %}<a href="{{ notifs }}" class="nav-link"><span class="nav-icon">🔔</span> Notifications</a>{% endif %}
+      {% if notifs %}<a href="{{ notifs }}?is_read__exact=0" class="nav-link sub urgent"><span class="nav-icon">🔴</span> Unread</a>{% endif %}
+      {% if notifpref %}<a href="{{ notifpref }}" class="nav-link sub"><span class="nav-icon">⚙️</span> Preferences</a>{% endif %}
+      {% if devtok %}<a href="{{ devtok }}" class="nav-link sub"><span class="nav-icon">📱</span> Device Tokens</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Moderation & Reports ── -->
+    {% url 'admin:core_report_changelist' as reps %}
+    {% url 'admin:core_reportevidence_changelist' as repev %}
+    {% url 'admin:core_auditlog_changelist' as audit %}
+    {% if reps %}
+    <div class="nav-section">
+      <div class="nav-section-header">🛡️ Moderation & Reports</div>
+      {% if reps %}<a href="{{ reps }}?status__exact=SUBMITTED" class="nav-link urgent"><span class="nav-icon">🔔</span> Pending Reports</a>{% endif %}
+      {% if reps %}<a href="{{ reps }}?status__exact=ESCALATED" class="nav-link urgent" style="font-weight:700"><span class="nav-icon">🚨</span> Escalated</a>{% endif %}
+      {% if reps %}<a href="{{ reps }}?severity__exact=CRITICAL" class="nav-link urgent"><span class="nav-icon">💀</span> Critical Severity</a>{% endif %}
+      {% if reps %}<a href="{{ reps }}?status__exact=UNDER_REVIEW" class="nav-link warn"><span class="nav-icon">🔍</span> Under Review</a>{% endif %}
+      {% if reps %}<a href="{{ reps }}" class="nav-link"><span class="nav-icon">📊</span> All Reports</a>{% endif %}
+      {% if repev %}<a href="{{ repev }}" class="nav-link sub"><span class="nav-icon">🗂️</span> Report Evidence</a>{% endif %}
+      {% if audit %}<a href="{{ audit }}" class="nav-link"><span class="nav-icon">🔍</span> Audit Log</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Support Tickets ── -->
+    {% url 'admin:core_supportticket_changelist' as tix %}
+    {% url 'admin:core_supportmessage_changelist' as tixmsg %}
+    {% if tix %}
+    <div class="nav-section">
+      <div class="nav-section-header">🎫 Support</div>
+      {% if tix %}<a href="{{ tix }}?status__exact=OPEN" class="nav-link warn"><span class="nav-icon">🎫</span> Open Tickets</a>{% endif %}
+      {% if tix %}<a href="{{ tix }}?status__exact=IN_PROGRESS" class="nav-link warn"><span class="nav-icon">⚙️</span> In Progress</a>{% endif %}
+      {% if tix %}<a href="{{ tix }}?category__exact=VERIFICATION" class="nav-link sub"><span class="nav-icon">✅</span> Verification Issues</a>{% endif %}
+      {% if tix %}<a href="{{ tix }}?category__exact=BILLING" class="nav-link sub"><span class="nav-icon">💳</span> Billing Issues</a>{% endif %}
+      {% if tix %}<a href="{{ tix }}" class="nav-link"><span class="nav-icon">🎟️</span> All Tickets</a>{% endif %}
+      {% if tixmsg %}<a href="{{ tixmsg }}" class="nav-link sub"><span class="nav-icon">💬</span> Support Messages</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── CME & Phase 3 ── -->
+    {% url 'admin:core_cmeevent_changelist' as cmeev %}
+    {% url 'admin:core_cmecredit_changelist' as cmecr %}
+    {% url 'admin:core_endorsement_changelist' as endorse %}
+    {% url 'admin:core_secondopinionrequest_changelist' as secop %}
+    {% url 'admin:core_telemedicinesession_changelist' as tele %}
+    {% if cmeev or cmecr or endorse or secop or tele %}
+    <div class="nav-section">
+      <div class="nav-section-header">🎓 CME & Phase 3</div>
+      {% if cmeev %}<a href="{{ cmeev }}" class="nav-link"><span class="nav-icon">📚</span> CME Events</a>{% endif %}
+      {% if cmecr %}<a href="{{ cmecr }}" class="nav-link"><span class="nav-icon">🏅</span> CME Credits</a>{% endif %}
+      {% if cmecr %}<a href="{{ cmecr }}?status__exact=PENDING" class="nav-link sub warn"><span class="nav-icon">⏳</span> Pending Credits</a>{% endif %}
+      {% if endorse %}<a href="{{ endorse }}" class="nav-link"><span class="nav-icon">👍</span> Endorsements</a>{% endif %}
+      {% if secop %}<a href="{{ secop }}" class="nav-link"><span class="nav-icon">🔬</span> Second Opinions</a>{% endif %}
+      {% if tele %}<a href="{{ tele }}" class="nav-link"><span class="nav-icon">📹</span> Telemedicine Sessions</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Billing ── -->
+    {% url 'admin:core_plan_changelist' as plans %}
+    {% url 'admin:core_subscription_changelist' as subs %}
+    {% url 'admin:core_entitlement_changelist' as entitle %}
+    {% url 'admin:core_invoice_changelist' as invs %}
+    {% url 'admin:core_payment_changelist' as pays %}
+    {% if plans %}
+    <div class="nav-section">
+      <div class="nav-section-header">💳 Billing</div>
+      {% if plans %}<a href="{{ plans }}" class="nav-link"><span class="nav-icon">📦</span> Plans</a>{% endif %}
+      {% if subs %}<a href="{{ subs }}" class="nav-link"><span class="nav-icon">🔄</span> Subscriptions</a>{% endif %}
+      {% if entitle %}<a href="{{ entitle }}" class="nav-link sub"><span class="nav-icon">🔑</span> Entitlements</a>{% endif %}
+      {% if invs %}<a href="{{ invs }}" class="nav-link"><span class="nav-icon">🧾</span> Invoices</a>{% endif %}
+      {% if pays %}<a href="{{ pays }}" class="nav-link sub"><span class="nav-icon">💰</span> Payments</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Analytics ── -->
+    {% url 'admin:core_hospitalanalyticssnapshot_changelist' as analytics %}
+    {% if analytics %}
+    <div class="nav-section">
+      <div class="nav-section-header">📊 Analytics</div>
+      {% if analytics %}<a href="{{ analytics }}" class="nav-link"><span class="nav-icon">📊</span> Hospital Analytics</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Settings & Config ── -->
+    {% url 'admin:core_matchingconfig_changelist' as mconf %}
+    {% url 'admin:core_specialization_changelist' as specs %}
+    {% url 'admin:core_qualification_changelist' as quals %}
+    {% url 'admin:core_council_changelist' as councils %}
+    {% if mconf or specs %}
+    <div class="nav-section">
+      <div class="nav-section-header">⚙️ Settings & Config</div>
+      {% if mconf %}<a href="{{ mconf }}" class="nav-link success" style="font-weight:600"><span class="nav-icon">⚙️</span> Matching Config</a>{% endif %}
+      {% if specs %}<a href="{{ specs }}" class="nav-link"><span class="nav-icon">🏷️</span> Specializations</a>{% endif %}
+      {% if quals %}<a href="{{ quals }}" class="nav-link"><span class="nav-icon">🎓</span> Qualifications</a>{% endif %}
+      {% if councils %}<a href="{{ councils }}" class="nav-link"><span class="nav-icon">🏛️</span> Medical Councils</a>{% endif %}
+    </div>
+    <div class="nav-divider"></div>
+    {% endif %}
+
+    <!-- ── Auth & Permissions (Super Admin) ── -->
+    {% url 'admin:auth_group_changelist' as groups %}
+    {% url 'admin:auth_permission_changelist' as perms %}
+    {% if groups or perms %}
+    <div class="nav-section">
+      <div class="nav-section-header">🔑 Auth & Permissions</div>
+      {% if groups %}<a href="{{ groups }}" class="nav-link"><span class="nav-icon">👥</span> Groups</a>{% endif %}
+      {% if perms %}<a href="{{ perms }}" class="nav-link"><span class="nav-icon">🔒</span> Permissions</a>{% endif %}
+    </div>
+    {% endif %}
+
+  </div>
+</nav>
+
+<script>
+(function() {
+  // Active link highlight
+  var path = window.location.pathname;
+  document.querySelectorAll('#nav-sidebar .nav-link').forEach(function(a) {
+    var href = a.getAttribute('href');
+    if (href && path.startsWith(href.split('?')[0]) && href !== '/admin/') {
+      a.classList.add('active');
+    }
+  });
+
+  // Filter
+  var filter = document.getElementById('nav-filter');
+  if (!filter) return;
+  filter.addEventListener('input', function() {
+    var q = this.value.toLowerCase();
+    document.querySelectorAll('#nav-sidebar .nav-link').forEach(function(a) {
+      a.style.display = (!q || a.textContent.toLowerCase().includes(q)) ? '' : 'none';
+    });
+    document.querySelectorAll('.nav-section').forEach(function(sec) {
+      var visible = Array.from(sec.querySelectorAll('.nav-link')).some(function(a) { return a.style.display !== 'none'; });
+      sec.style.display = visible ? '' : 'none';
+    });
+  });
+})();
+</script>

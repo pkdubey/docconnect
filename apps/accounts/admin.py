@@ -1,5 +1,6 @@
 from django import forms
-from django.contrib.admin import ModelAdmin, StackedInline
+from django.contrib import messages
+from django.contrib.admin import ModelAdmin, StackedInline, action
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from apps.core.admin_site import docconnect_admin
 from .models import User, OTPChallenge, RefreshSession
@@ -17,7 +18,6 @@ class UserChangeForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk:
             meta = self.instance.metadata or {}
-            # For doctors, pull from DoctorProfile
             if self.instance.user_type == 'DOCTOR':
                 try:
                     dp = self.instance.doctor_profile
@@ -71,17 +71,79 @@ class HospitalUserInline(StackedInline):
     verbose_name = 'Hospital Association'
 
 
+# ── User Actions (README §5.1 — restrict, suspend, restore, deactivate) ──────
+
+@action(description='🔴 Suspend selected users')
+def suspend_users(modeladmin, request, queryset):
+    from apps.core.models import AuditLog
+    # Prevent suspending super admins
+    qs = queryset.filter(is_super_admin=False).exclude(status='SUSPENDED')
+    updated = qs.update(status='SUSPENDED')
+    for obj in qs:
+        AuditLog.objects.create(
+            action='USER_SUSPENDED',
+            target_type='USER',
+            target_id=obj.id,
+            performed_by=request.user,
+            metadata={'phone': obj.phone},
+        )
+    messages.warning(request, f'{updated} user(s) suspended.')
+
+
+@action(description='🟢 Restore (set Active) selected users')
+def restore_users(modeladmin, request, queryset):
+    from apps.core.models import AuditLog
+    qs = queryset.exclude(status='ACTIVE')
+    updated = qs.update(status='ACTIVE', is_active=True)
+    for obj in qs:
+        AuditLog.objects.create(
+            action='USER_RESTORED',
+            target_type='USER',
+            target_id=obj.id,
+            performed_by=request.user,
+            metadata={'phone': obj.phone},
+        )
+    messages.success(request, f'{updated} user(s) restored.')
+
+
+@action(description='⛔ Deactivate selected users')
+def deactivate_users(modeladmin, request, queryset):
+    from apps.core.models import AuditLog
+    qs = queryset.filter(is_super_admin=False).exclude(status='DELETED')
+    updated = qs.update(status='DELETED', is_active=False)
+    for obj in qs:
+        AuditLog.objects.create(
+            action='USER_DEACTIVATED',
+            target_type='USER',
+            target_id=obj.id,
+            performed_by=request.user,
+            metadata={'phone': obj.phone},
+        )
+    messages.error(request, f'{updated} user(s) deactivated.')
+
+
+@action(description='🔒 Revoke all sessions')
+def revoke_all_sessions(modeladmin, request, queryset):
+    from django.utils import timezone
+    count = 0
+    for user in queryset:
+        count += user.sessions.filter(revoked_at__isnull=True).update(revoked_at=timezone.now())
+    messages.success(request, f'{count} session(s) revoked.')
+
+
 class UserAdmin(BaseUserAdmin):
     form = UserChangeForm
-    list_display = ('phone', 'email', 'get_name', 'user_type', 'status', 'is_staff', 'created_at')
-    list_filter = ('user_type', 'status', 'is_staff')
+    list_display = ('phone', 'email', 'get_name', 'user_type', 'status', 'is_super_admin', 'mfa_enabled', 'is_staff', 'created_at')
+    list_filter = ('user_type', 'status', 'is_super_admin', 'mfa_enabled', 'is_staff')
     search_fields = ('phone', 'email')
     ordering = ('-created_at',)
     exclude = ('search_vector', 'metadata')
+    actions = [suspend_users, restore_users, deactivate_users, revoke_all_sessions]
     fieldsets = (
         (None, {'fields': ('phone', 'email', 'password')}),
         ('Name', {'fields': ('first_name', 'last_name')}),
         ('Info', {'fields': ('user_type', 'status')}),
+        ('Admin & MFA', {'fields': ('is_super_admin', 'mfa_enabled')}),
         ('Permissions', {'fields': ('is_staff', 'is_superuser', 'is_active', 'groups', 'user_permissions')}),
     )
     add_fieldsets = (
@@ -110,14 +172,23 @@ class UserAdmin(BaseUserAdmin):
 
 
 class OTPChallengeAdmin(ModelAdmin):
-    list_display = ('phone', 'purpose', 'attempts', 'consumed_at', 'expires_at', 'created_at')
+    list_display = ('phone', 'purpose', 'attempts', 'max_attempts', 'consumed_at', 'expires_at', 'created_at')
     list_filter = ('purpose',)
     search_fields = ('phone',)
+    ordering = ('-created_at',)
 
 
 class RefreshSessionAdmin(ModelAdmin):
-    list_display = ('user', 'device_name', 'ip_address', 'expires_at', 'revoked_at')
-    search_fields = ('user__phone',)
+    list_display = ('user', 'device_name', 'ip_address', 'expires_at', 'revoked_at', 'created_at')
+    search_fields = ('user__phone', 'device_name', 'ip_address')
+    list_filter = ('revoked_at',)
+    ordering = ('-created_at',)
+    actions = ['revoke_sessions']
+
+    def revoke_sessions(self, request, queryset):
+        updated = queryset.filter(revoked_at__isnull=True).update(revoked_at=timezone.now())
+        messages.success(request, f'{updated} session(s) revoked.')
+    revoke_sessions.short_description = '🔒 Revoke selected sessions'
 
 
 docconnect_admin.register(User, UserAdmin)
