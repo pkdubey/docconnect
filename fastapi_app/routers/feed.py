@@ -383,9 +383,14 @@ async def get_feed(
     from apps.doctors.models import Post, PostLike
 
     def _fetch():
+        from django.db.models import Count, Q
         offset = (page - 1) * page_size
         posts = list(
             Post.objects.select_related('author', 'posted_by')
+            .annotate(
+                like_count=Count('likes', distinct=True),
+                comment_count=Count('comments', filter=Q(comments__parent__isnull=True), distinct=True),
+            )
             .order_by('-created_at')[offset: offset + page_size]
         )
         liked_ids = set()
@@ -402,25 +407,26 @@ async def get_feed(
     result = []
     for p in posts:
         author_id, photo, headline = '', '', ''
-        if not p.is_anonymous and p.author:
+        if not p.is_anonymous and p.author is not None:
             author_id = str(p.author.id)
             photo = p.author.photo_base64 or ''
             headline = p.author.headline or ''
         display = p.display_name
+        color_key = p.posted_by_id or p.author_id or 'default'
         result.append(PostOut(
             id=str(p.id),
             author=display,
             author_id=author_id or None,
             headline=headline or None,
             initials='AN' if p.is_anonymous else _initials(display),
-            color='#666' if p.is_anonymous else _color(p.posted_by_id or p.author_id or 0),
+            color='#666' if p.is_anonymous else _color(color_key),
             photo=photo or None,
             post_type=p.post_type,
             post_type_display=p.get_post_type_display(),
             content=p.content,
             image=p.image_base64 or None,
-            like_count=p.likes.count(),
-            comment_count=p.comments.filter(parent__isnull=True).count(),
+            like_count=p.like_count,
+            comment_count=p.comment_count,
             liked=str(p.id) in liked_ids,
             is_mine=p.posted_by_id == current_user.id,
             pii_flagged=getattr(p, 'pii_flagged', False),

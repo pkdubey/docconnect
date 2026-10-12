@@ -34,20 +34,101 @@ _account_router = _APIRouter(prefix="/api/v1", tags=["Account"])
 async def delete_account(credentials: _HTTPAuthCreds = _Depends(_account_security)):
     return await auth._delete_account_impl(credentials)
 
+_DESCRIPTION = """
+# DocConnect API — Verified Professional Network for Doctors
+
+## Quick Start for Mobile Developers
+
+### Step 1 — Get a Token
+```
+POST /api/v1/auth/login/
+Content-Type: application/json
+
+{ "phone": "9000000001", "password": "Test@1234" }
+```
+Response gives you `access_token` (valid 60 min) and `refresh_token` (valid 7 days).
+
+### Step 2 — Authorize in Swagger
+Click **Authorize 🔒** (top right) → paste `access_token` → click Authorize.
+All protected endpoints will now work.
+
+### Step 3 — Refresh Token
+```
+POST /api/v1/auth/refresh/
+{ "refresh": "<refresh_token>" }
+```
+
+---
+
+## Test Credentials (Dev Only)
+
+| Role | Phone | Password |
+|------|-------|----------|
+| Doctor (Verified) | `9000000001` | `Test@1234` |
+| Doctor (Verified) | `9000000002` | `Test@1234` |
+| Hospital Admin | `8000000001` | `Test@1234` |
+| Platform Admin | `9999999998` | `Test@1234` |
+
+---
+
+## API Groups
+
+| Tag | What it covers |
+|-----|----------------|
+| **Auth** | Register, Login, OTP, Token refresh, Sessions |
+| **Feed & Posts** | Home screen, post feed, create/like/comment |
+| **Network** | Connections, follow, block, reports |
+| **Doctors** | Profile, qualifications, experience, verification |
+| **Jobs** | Post jobs, apply, pipeline, saved jobs |
+| **Hospitals** | Register hospital, branches, departments, staff |
+| **Availability** | Doctor availability slots |
+| **Shifts** | Urgent shift requirements, requests, lifecycle |
+| **Messaging** | Conversations, messages, read receipts |
+| **Notifications** | List, unread count, mark read, preferences |
+| **Search** | Universal search across doctors/hospitals/jobs |
+| **Communities** | Specialty groups, join/leave, community posts |
+| **Masters** | Specialties, qualifications, job types (lookup lists) |
+| **Admin** | Platform admin — verification, moderation, users |
+
+---
+
+## Common Response Codes
+
+| Code | Meaning |
+|------|---------|
+| `200` | Success |
+| `201` | Created |
+| `400` | Validation error — check `detail` field |
+| `401` | Token missing or expired — re-login |
+| `403` | Forbidden — wrong user type or suspended |
+| `404` | Resource not found |
+| `500` | Server error — report to backend team |
+
+---
+
+## Pagination
+
+All list endpoints support `?page=1&page_size=10`.
+Response always includes `has_more: true/false` — keep fetching until `has_more` is `false`.
+
+## Date Format
+All timestamps are ISO 8601: `2025-08-15T10:30:00Z`
+"""
+
 app = FastAPI(
     title="DocConnect API",
-    description=(
-        "Verified Professional Network for Doctors\n\n"
-        "## Authentication\n"
-        "1. Call `POST /api/v1/auth/login/` with phone + password\n"
-        "2. Copy the `access_token` from the response\n"
-        "3. Click **Authorize 🔒** (top right) → paste token → click Authorize\n"
-        "4. All protected endpoints will now work"
-    ),
+    description=_DESCRIPTION,
     version="1.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
+    swagger_ui_parameters={
+        "defaultModelsExpandDepth": 1,
+        "defaultModelExpandDepth": 3,
+        "displayRequestDuration": True,
+        "filter": True,
+        "tryItOutEnabled": True,
+    },
 )
 
 
