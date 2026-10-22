@@ -3612,44 +3612,33 @@ REQUESTED → ACCEPTED_BY_DOCTOR → CONFIRMED_BY_HOSPITAL → COMPLETED
 
 ## Appendix B — Quick Start for Mobile
 
-### Step 1 — Register & Login
+> 📱 **Full screen-by-screen integration guide for Android & iOS:**
+> See `docs/api/MOBILE_INTEGRATION_GUIDE.md`
+
+### Doctor App — Minimum Flow
 ```
-POST /api/v1/auth/register/   → get tokens
-POST /api/v1/auth/login/      → get tokens
+1. POST /auth/register/                           → get tokens
+2. POST /devices/                                 → register FCM/APNs token
+3. GET  /masters/specialties/                     → load dropdowns
+4. POST /doctors/profile/                         → create profile
+5. POST /doctors/profile/me/registrations/        → add NMC number
+6. POST /doctors/profile/me/verification/submit/  → submit for verification
+7. GET  /feed/home/                               → load home screen (1 call)
+8. GET  /feed/                                    → load feed posts
 ```
 
-### Step 2 — Load Home Screen (1 API call)
+### Hospital App — Minimum Flow
 ```
-GET /api/v1/feed/home/   → stats + urgent jobs + suggested doctors + unread counts
-```
-
-### Step 3 — Load Feed
-```
-GET /api/v1/feed/?page=1
-```
-
-### Step 4 — Doctor Profile Setup
-```
-POST /api/v1/doctors/profile/me/registrations/   → add NMC registration
-POST /api/v1/doctors/profile/me/verification/submit/   → submit for verification
-```
-
-### Step 5 — Apply to Job
-```
-GET  /api/v1/jobs/?specialty=uuid   → browse jobs
-POST /api/v1/jobs/{id}/apply/       → one-tap apply
-```
-
-### Step 6 — Post Availability (Locum)
-```
-POST /api/v1/availability/   → post availability with slots
-GET  /api/v1/shifts/requirements/?urgency=IMMEDIATE   → browse urgent shifts
-POST /api/v1/shifts/requirements/{id}/request/        → request shift
+1. POST /auth/register/                    → user_type: HOSPITAL_ADMIN
+2. POST /hospitals/register/               → create hospital
+3. POST /hospitals/me/verification/submit/ → submit for verification
+4. POST /jobs/                             → post first job
 ```
 
 ### Token Refresh Flow
 ```
-Access token expires → POST /api/v1/auth/refresh/ with refresh_token → new access_token
+On 401 response → POST /auth/refresh/ with refresh_token → retry with new access_token
+On refresh 401  → clear tokens → redirect to Login
 ```
 
 ### Swagger UI

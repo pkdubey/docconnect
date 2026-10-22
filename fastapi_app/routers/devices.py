@@ -37,7 +37,27 @@ class DeviceOut(BaseModel):
 
 
 @router.post("/", response_model=DeviceOut, status_code=201,
-             summary="Register device for push notifications (FCM or APNS/iOS)")
+             summary="Register device for push notifications (FCM or APNS/iOS)",
+             description="""
+Register a device token to receive push notifications.
+
+**Call this immediately after every login** (silently in background).
+
+**platform values:**
+- `FCM` — Android (Firebase Cloud Messaging token)
+- `APNS` — iOS (Apple Push Notification Service token)
+
+**Re-registering:** If same `device_id` is sent again, the token is updated (no duplicate created).
+
+**On logout:** Call `DELETE /devices/{id}/` to stop receiving notifications on that device.
+
+**Notification types you will receive:**
+- `CONNECTION_REQUEST` → navigate to Network screen
+- `APPLICATION_STATUS_CHANGED` → navigate to My Applications
+- `SHIFT_REQUEST` → navigate to Shift Requests
+- `NEW_MESSAGE` → navigate to that conversation
+- `VERIFICATION_APPROVED` / `VERIFICATION_REJECTED` → navigate to Profile
+""")
 async def register_device(data: DeviceRegister, current_user=Depends(get_current_user)):
     def _register():
         from apps.notifications.models import DeviceToken

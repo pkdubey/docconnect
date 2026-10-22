@@ -87,7 +87,21 @@ class RegisterResponse(BaseModel):
     profile_created: bool
 
 
-@router.post("/register/", response_model=RegisterResponse, status_code=201)
+@router.post("/register/", response_model=RegisterResponse, status_code=201,
+    summary="Register a new user",
+    description="""
+Register a new Doctor or Hospital Admin account.
+
+**user_type values:**
+- `DOCTOR` — for doctor accounts
+- `HOSPITAL_ADMIN` — for hospital admin accounts
+- `HOSPITAL_HR` — for HR/Recruiter accounts
+
+**After register:** Save `access_token` and `refresh_token` locally.
+Doctor accounts get a basic profile auto-created (`profile_created: true`).
+
+**Next step for doctors:** Call `POST /doctors/profile/` to complete profile setup.
+""")
 async def register(request: RegisterRequest):
     from django.contrib.auth import get_user_model
     from rest_framework_simplejwt.tokens import RefreshToken
@@ -137,7 +151,23 @@ async def register(request: RegisterRequest):
     )
 
 
-@router.post("/login/", response_model=TokenResponse)
+@router.post("/login/", response_model=TokenResponse,
+    summary="Login with phone + password",
+    description="""
+Login and get JWT tokens.
+
+**user_type must match the account type:**
+- `DOCTOR` for doctor accounts
+- `HOSPITAL_ADMIN` for hospital admin accounts
+- `ADMIN` for platform admin accounts
+
+**After login:**
+1. Save `access_token` (expires ~60 min) and `refresh_token` (expires ~7 days)
+2. Call `POST /devices/` to register FCM/APNs push token
+3. Call `GET /feed/home/` to load home screen
+
+**Token expired?** Call `POST /auth/refresh/` with the refresh_token.
+""")
 async def login_with_password(request: PasswordLoginRequest):
     from django.contrib.auth import get_user_model
     from rest_framework_simplejwt.tokens import RefreshToken
@@ -165,7 +195,22 @@ async def login_with_password(request: PasswordLoginRequest):
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
-@router.post("/send-otp/", response_model=OTPSendResponse)
+@router.post("/send-otp/", response_model=OTPSendResponse,
+    summary="Send OTP to phone",
+    description="""
+Send a 6-digit OTP to the given phone number.
+
+**purpose values:**
+- `LOGIN` — OTP login flow
+- `REGISTER` — phone verification during registration
+- `RESET_PASSWORD` — forgot password flow
+
+**Dev mode:** OTP is returned in the response body (`otp` field). In production, it is sent via SMS only.
+
+**Rate limit:** Max 5 OTPs per phone per 10 minutes. Returns 429 if exceeded.
+
+**Next step:** Call `POST /auth/verify-otp/` with the received OTP.
+""")
 async def send_otp(request: OTPRequest):
     from django.utils import timezone
     from django.conf import settings
@@ -209,7 +254,15 @@ async def send_otp(request: OTPRequest):
     return OTPSendResponse(**response)
 
 
-@router.post("/verify-otp/", response_model=TokenResponse)
+@router.post("/verify-otp/", response_model=TokenResponse,
+    summary="Verify OTP and get tokens",
+    description="""
+Verify the OTP received via SMS and get JWT tokens.
+
+OTP is valid for **5 minutes** and can be attempted max **5 times**.
+
+**After success:** Same as login — save tokens, register device, load home screen.
+""")
 async def verify_otp(request: OTPVerify):
     from django.utils import timezone
     from django.contrib.auth import get_user_model
@@ -254,7 +307,19 @@ async def verify_otp(request: OTPVerify):
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
-@router.post("/refresh/", response_model=TokenResponse)
+@router.post("/refresh/", response_model=TokenResponse,
+    summary="Refresh access token",
+    description="""
+Get a new access_token using the refresh_token.
+
+**When to call:** When any API returns `401 Unauthorized`.
+
+**Flow:**
+1. Call this endpoint with stored `refresh_token`
+2. Save the new `access_token`
+3. Retry the original failed request
+4. If this also returns 401 → clear tokens → redirect user to Login screen
+""")
 async def refresh_token(body: RefreshRequest):
     from rest_framework_simplejwt.tokens import RefreshToken as RT
     from rest_framework_simplejwt.exceptions import TokenError

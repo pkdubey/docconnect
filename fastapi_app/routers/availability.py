@@ -111,7 +111,26 @@ def _avail_dict(a) -> AvailabilityOut:
 
 # ── Endpoints ─────────────────────────────────────────────────
 
-@router.post("/", response_model=AvailabilityCreateOut, status_code=201, summary="Post doctor availability")
+@router.post("/", response_model=AvailabilityCreateOut, status_code=201,
+    summary="Post doctor availability",
+    description="""
+**Doctor side.** Post your availability for locum/visiting/part-time work.
+
+**availability_type values:**
+- `LOCUM` — short-term fill-in shifts
+- `VISITING` — regular visiting consultant slots
+- `TEMPORARY` — fixed-term contract (weeks/months)
+- `PART_TIME` — ongoing part-time engagement
+
+**slots[]** — add specific date+time windows when you are available.
+Each slot: `slot_date`, `start_time`, `end_time` (format: `HH:MM:SS`)
+
+**Why this is needed:**
+You must have active availability posted before you can request a shift via `POST /shifts/requirements/{id}/request/`.
+The system matches your availability dates/times against hospital shift requirements.
+
+**Returns 409 if:** Slot overlaps with an already accepted/confirmed shift.
+""")
 async def create_availability(data: AvailabilityCreate, current_doctor=Depends(get_current_doctor)):
     from apps.availability.models import AvailabilitySlot, DoctorAvailability
 

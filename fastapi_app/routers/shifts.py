@@ -146,7 +146,22 @@ def _req_dict(r) -> ShiftRequirementOut:
 
 # ── Endpoints ─────────────────────────────────────────────────
 
-@router.post("/requirements/", response_model=ShiftRequirementOut, status_code=201, summary="Post a shift requirement")
+@router.post("/requirements/", response_model=ShiftRequirementOut, status_code=201,
+    summary="Post a shift requirement",
+    description="""
+**Hospital side only.** Post an urgent shift requirement.
+
+**urgency values:**
+- `NORMAL` — planned in advance
+- `URGENT` — needed within 24–48 hours
+- `IMMEDIATE` — needed today / emergency
+
+**After posting:**
+1. Call `GET /shifts/requirements/{id}/matched-doctors/` to see available doctors
+2. Call `POST /shifts/requirements/{id}/request/` to send request to a specific doctor
+
+**Status flow:** `OPEN` → `FILLED` (when enough doctors confirmed) / `CANCELLED` / `EXPIRED`
+""")
 async def create_shift_requirement(req: ShiftRequirementCreate, current_user=Depends(get_current_user)):
     from apps.hospitals.models import HospitalUser
     from apps.shifts.models import ShiftRequirement
@@ -192,7 +207,20 @@ async def my_hospital_requirements(current_user=Depends(get_current_user)):
     return [_req_dict(r) for r in reqs]
 
 
-@router.get("/requirements/", response_model=ShiftRequirementsListResponse, summary="List open shift requirements")
+@router.get("/requirements/", response_model=ShiftRequirementsListResponse,
+    summary="List open shift requirements",
+    description="""
+**Doctor side.** Browse open shift requirements to find locum/visiting work.
+
+**Filter by:**
+- `urgency`: `IMMEDIATE` for same-day shifts, `URGENT` for 24-48hr, `NORMAL` for planned
+- `city`: filter by location
+- `specialty`: filter by specialization UUID
+
+**After finding a shift:** Call `POST /shifts/requirements/{id}/request/` to request it.
+
+> Requires active availability posted via `POST /availability/` covering the shift date.
+""")
 async def list_shift_requirements(
     urgency: Optional[str] = Query(None),
     city: Optional[str] = Query(None),
@@ -241,7 +269,22 @@ async def my_shift_requests(current_doctor=Depends(get_current_doctor)):
     ) for r in reqs]
 
 
-@router.post("/requirements/{requirement_id}/request/", response_model=ShiftActionOut, status_code=201, summary="Doctor requests a shift")
+@router.post("/requirements/{requirement_id}/request/", response_model=ShiftActionOut, status_code=201,
+    summary="Doctor requests a shift",
+    description="""
+**Doctor side.** Request to take a shift from a hospital's open requirement.
+
+**Prerequisites:**
+- Doctor must have active availability (`POST /availability/`) covering the requirement date
+- No overlapping confirmed/accepted shift on the same date+time
+
+**Returns 409 if:**
+- No active availability covering the date
+- Overlapping shift already accepted or confirmed
+- Already requested this shift
+
+**After requesting:** Hospital will send a ShiftRequest. Doctor responds via `PATCH /shifts/requests/{id}/respond/`
+""")
 async def request_shift(requirement_id: str, current_doctor=Depends(get_current_doctor)):
     from apps.shifts.models import ShiftRequirement, ShiftRequest
     from apps.availability.models import DoctorAvailability
@@ -281,7 +324,22 @@ async def request_shift(requirement_id: str, current_doctor=Depends(get_current_
     return ShiftActionOut(success=True, status=sr.status)
 
 
-@router.patch("/requests/{request_id}/respond/", response_model=ShiftActionOut, summary="Doctor accepts or declines shift")
+@router.patch("/requests/{request_id}/respond/", response_model=ShiftActionOut,
+    summary="Doctor accepts or declines shift",
+    description="""
+**Doctor side.** Accept or decline a shift request from a hospital.
+
+- `accept: true` → status becomes `ACCEPTED_BY_DOCTOR`
+- `accept: false` → status becomes `DECLINED_BY_DOCTOR`
+
+**After accepting:** Hospital must confirm via `PATCH /shifts/requests/{id}/confirm/`
+
+**Shift lifecycle:**
+```
+REQUESTED → ACCEPTED_BY_DOCTOR → CONFIRMED_BY_HOSPITAL → COMPLETED
+           → DECLINED_BY_DOCTOR
+```
+""")
 async def respond_to_shift(request_id: str, body: ShiftRespondRequest, current_doctor=Depends(get_current_doctor)):
     from apps.shifts.models import ShiftRequest
     from django.utils import timezone

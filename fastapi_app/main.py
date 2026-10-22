@@ -37,82 +37,256 @@ async def delete_account(credentials: _HTTPAuthCreds = _Depends(_account_securit
 _DESCRIPTION = """
 # DocConnect API — Verified Professional Network for Doctors
 
-## Quick Start for Mobile Developers
+---
 
-### Step 1 — Get a Token
+## ⚡ 3-Step Swagger Setup
+
+**Step 1 — Login and get token:**
+Go to **Authentication → POST /api/v1/auth/login/** → click **Try it out** → use test credentials below → **Execute**
+
+Copy the `access_token` from the response.
+
+**Step 2 — Authorize:**
+Click **Authorize 🔒** button (top right of this page) → paste the `access_token` → click **Authorize** → **Close**.
+
+**Step 3 — Call any endpoint:**
+All 🔒 endpoints will now work. Click any endpoint → **Try it out** → **Execute**.
+
+---
+
+## 🧪 Test Credentials (Dev Only)
+
+| Role | Phone | Password | Use for |
+|------|-------|----------|---------|
+| Doctor (Verified) | `9000000001` | `Test@1234` | All doctor APIs |
+| Doctor (Verified) | `9000000002` | `Test@1234` | Testing connections/messaging |
+| Hospital Admin | `8000000001` | `Test@1234` | All hospital/jobs APIs |
+| Platform Admin | `9999999998` | `Test@1234` | Admin panel APIs |
+
+> Login with `user_type: "DOCTOR"` for doctor accounts, `user_type: "HOSPITAL_ADMIN"` for hospital accounts.
+
+---
+
+## 📱 Doctor App — Screen-by-Screen API Flow
+
+### 🚀 App Launch / Splash
 ```
-POST /api/v1/auth/login/
-Content-Type: application/json
-
-{ "phone": "9000000001", "password": "Test@1234" }
+If token stored → POST /auth/refresh/  →  go to Home
+If no token     →  go to Login screen
 ```
-Response gives you `access_token` (valid 60 min) and `refresh_token` (valid 7 days).
 
-### Step 2 — Authorize in Swagger
-Click **Authorize 🔒** (top right) → paste `access_token` → click Authorize.
-All protected endpoints will now work.
-
-### Step 3 — Refresh Token
+### 📝 Register Screen
 ```
-POST /api/v1/auth/refresh/
-{ "refresh": "<refresh_token>" }
+POST /auth/register/   { user_type: "DOCTOR" }  →  save access_token + refresh_token
+```
+After register → go to Profile Setup.
+
+### 🔐 Login Screen
+```
+Option A (password):  POST /auth/login/
+Option B (OTP):       POST /auth/send-otp/  →  POST /auth/verify-otp/
+```
+After login → call POST /devices/ to register push token (silent, background).
+
+### 👤 Profile Setup (First Time Only)
+```
+1. GET  /masters/specialties/                        ← load specialty dropdown
+2. GET  /masters/qualifications/                     ← load qualification dropdown
+3. POST /doctors/profile/                            ← create profile
+4. POST /doctors/profile/me/photo/                   ← upload photo (optional)
+5. POST /doctors/profile/me/registrations/           ← add NMC number
+6. POST /doctors/profile/me/verification/submit/     ← submit for verification
+```
+
+### 🏠 Home Screen  ← ONE API CALL
+```
+GET /feed/home/
+→ returns: stats + urgent_jobs[] + suggested_doctors[] + unread_messages + unread_notifications + pending_connections
+```
+⚠️ Do NOT call multiple APIs for home. This single endpoint returns everything.
+
+### 📰 Feed Screen
+```
+GET  /feed/?page=1                          ← load posts (infinite scroll)
+POST /feed/posts/{id}/like/                 ← like/unlike toggle
+GET  /feed/posts/{id}/comments/             ← load comments
+POST /feed/posts/{id}/comments/             ← add comment (multipart/form-data)
+POST /feed/comments/{id}/reply/             ← reply to comment
+POST /feed/posts/                           ← create post (multipart/form-data)
+```
+
+### 💼 Jobs Screen
+```
+GET  /jobs/                                 ← browse jobs (filter: specialty, city, job_type, is_urgent)
+GET  /jobs/{id}/                            ← job detail
+POST /jobs/{id}/apply/                      ← one-tap apply
+POST /jobs/{id}/save/                       ← save for later
+GET  /doctors/me/saved-jobs/                ← saved jobs list
+GET  /jobs/my-applications/                 ← my applications (filter by status)
+POST /jobs/{id}/withdraw/                   ← withdraw application
+```
+
+### 🤝 Network Screen
+```
+GET  /network/connections/?type=accepted    ← My Connections tab
+GET  /network/connections/?type=received    ← Pending Requests tab
+POST /network/connections/request/          ← send connection request
+POST /network/connections/{id}/accept/      ← accept request
+POST /network/connections/{id}/reject/      ← reject request
+```
+
+### 💬 Messages Screen
+```
+GET  /messages/conversations/               ← list all chats
+GET  /messages/conversations/{id}/messages/ ← open a chat
+POST /messages/conversations/{id}/messages/ ← send message
+POST /messages/conversations/{id}/read/     ← mark as read (call on open)
+POST /messages/conversations/              ← start new chat { participant_user_id }
+```
+
+### 🔔 Notifications Screen
+```
+GET  /notifications/                        ← list notifications
+GET  /notifications/unread-count/           ← badge count (call on app resume)
+PATCH /notifications/{id}/read/             ← mark one read
+POST /notifications/read-all/              ← mark all read
+```
+
+### 📅 Availability Screen (Locum/Visiting)
+```
+POST /availability/                                  ← post availability with slots[]
+GET  /availability/me/                               ← my availabilities
+GET  /shifts/requirements/?urgency=IMMEDIATE         ← browse urgent shifts
+POST /shifts/requirements/{id}/request/              ← request a shift
+GET  /shifts/requests/mine/                          ← my shift requests
+PATCH /shifts/requests/{id}/respond/  { accept: true } ← accept/decline shift
 ```
 
 ---
 
-## Test Credentials (Dev Only)
+## 🏥 Hospital App — Screen-by-Screen API Flow
 
-| Role | Phone | Password |
-|------|-------|----------|
-| Doctor (Verified) | `9000000001` | `Test@1234` |
-| Doctor (Verified) | `9000000002` | `Test@1234` |
-| Hospital Admin | `8000000001` | `Test@1234` |
-| Platform Admin | `9999999998` | `Test@1234` |
+### 🏥 Hospital Setup
+```
+1. POST /auth/register/          { user_type: "HOSPITAL_ADMIN" }
+2. POST /hospitals/register/     ← create hospital profile
+3. POST /hospitals/me/verification/submit/
+4. POST /hospitals/me/departments/
+5. POST /hospitals/me/invite-user/   ← add HR/Recruiter
+```
+
+### 📊 Dashboard
+```
+GET /analytics/hospital/    ← jobs, applications, hired, shifts stats
+GET /feed/home/             ← unread counts
+```
+
+### 📋 Post a Job
+```
+1. GET  /masters/specialties/       ← dropdown
+2. GET  /masters/qualifications/    ← dropdown
+3. POST /jobs/                      ← create job (auto-published)
+```
+
+### 👥 Recruitment Pipeline
+```
+GET  /jobs/{id}/applications/                    ← view applicants
+PATCH /jobs/applications/{id}/status/            ← move pipeline: SHORTLISTED → INTERVIEW → OFFERED → HIRED
+POST /applications/{id}/interview/               ← schedule interview
+POST /applications/{id}/offer/                   ← send offer
+POST /applications/{id}/notes/                   ← add internal HR note
+```
+
+### 🔍 Candidate Discovery
+```
+GET  /hospitals/me/candidates/?specialty=uuid&city=Mumbai&verified_only=true
+GET  /jobs/{id}/matches/    ← AI matched doctors for a job
+```
+
+### ⚡ Urgent Shifts
+```
+POST /shifts/requirements/                           ← post urgent requirement
+GET  /shifts/requirements/{id}/matched-doctors/      ← see matched doctors
+POST /shifts/requirements/{id}/request/              ← send shift request to doctor
+PATCH /shifts/requests/{id}/confirm/                 ← confirm after doctor accepts
+PATCH /shifts/requests/{id}/complete/                ← mark completed
+```
 
 ---
 
-## API Groups
+## 🔄 Token Refresh Logic (Mobile)
+
+```
+On any 401 response:
+  → POST /auth/refresh/  with stored refresh_token
+  → If success: save new access_token, retry original request
+  → If 401 again: clear tokens, redirect to Login screen
+```
+
+---
+
+## 📤 File Uploads
+
+```
+Step 1: POST /files/upload/   (multipart, purpose: CV / PROFILE_PHOTO / CREDENTIAL)
+        → returns file_id
+Step 2: Use file_id in other APIs (e.g. cv_file_id when applying to job)
+Step 3: GET /files/{id}/signed-url/  → get temporary URL to display the file
+```
+
+---
+
+## ❌ Error Handling
+
+| Code | Meaning | Action |
+|------|---------|--------|
+| `400` | Validation error | Show `detail` message to user |
+| `401` | Token expired | Refresh token → retry |
+| `403` | Wrong role | Show "Access denied" |
+| `404` | Not found | Show "Not found" |
+| `409` | Conflict (duplicate) | Show conflict message |
+| `429` | Rate limited | Wait and retry |
+| `500` | Server error | Log and show generic error |
+
+Error body is always: `{ "detail": "message here" }`
+
+---
+
+## 📄 Pagination
+
+All list endpoints: `?page=1&page_size=20`
+Response always has: `total`, `page`, `page_size`, `results[]`
+For infinite scroll: keep loading until `results` is empty.
+
+---
+
+## 🏷️ API Groups
 
 | Tag | What it covers |
 |-----|----------------|
-| **Auth** | Register, Login, OTP, Token refresh, Sessions |
-| **Feed & Posts** | Home screen, post feed, create/like/comment |
+| **Authentication** | Register, Login, OTP, Token refresh, Sessions, Password |
+| **Feed & Posts** | Home screen (1 call), post feed, create/like/comment |
 | **Network** | Connections, follow, block, reports |
-| **Doctors** | Profile, qualifications, experience, verification |
-| **Jobs** | Post jobs, apply, pipeline, saved jobs |
-| **Hospitals** | Register hospital, branches, departments, staff |
-| **Availability** | Doctor availability slots |
-| **Shifts** | Urgent shift requirements, requests, lifecycle |
-| **Messaging** | Conversations, messages, read receipts |
+| **Doctors** | Profile, qualifications, experience, verification, privacy |
+| **Jobs** | Post jobs, apply, pipeline, saved jobs, recommendations |
+| **Applications** | Interview, offer, notes, invite (hospital side) |
+| **Hospitals** | Register hospital, branches, departments, staff, candidates |
+| **Availability** | Doctor availability slots and preferences |
+| **Shifts** | Urgent shift requirements, requests, full lifecycle |
+| **Messaging** | Conversations, messages, read receipts, block/report |
 | **Notifications** | List, unread count, mark read, preferences |
-| **Search** | Universal search across doctors/hospitals/jobs |
+| **Devices** | Register FCM/APNs token for push notifications |
+| **Search** | Universal search across doctors/hospitals/jobs/communities |
 | **Communities** | Specialty groups, join/leave, community posts |
-| **Masters** | Specialties, qualifications, job types (lookup lists) |
-| **Admin** | Platform admin — verification, moderation, users |
+| **Files** | Upload files, get signed URLs |
+| **Masters** | Specialties, qualifications, job types — load once, cache |
+| **Support** | Raise and reply to support tickets |
+| **Admin** | Platform admin — verification, moderation, users, audit |
 
 ---
 
-## Common Response Codes
-
-| Code | Meaning |
-|------|---------|
-| `200` | Success |
-| `201` | Created |
-| `400` | Validation error — check `detail` field |
-| `401` | Token missing or expired — re-login |
-| `403` | Forbidden — wrong user type or suspended |
-| `404` | Resource not found |
-| `500` | Server error — report to backend team |
-
----
-
-## Pagination
-
-All list endpoints support `?page=1&page_size=10`.
-Response always includes `has_more: true/false` — keep fetching until `has_more` is `false`.
-
-## Date Format
-All timestamps are ISO 8601: `2025-08-15T10:30:00Z`
+## 📅 Date Format
+All timestamps: ISO 8601 → `2025-08-15T10:30:00Z`
 """
 
 app = FastAPI(
